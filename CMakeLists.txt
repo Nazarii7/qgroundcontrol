@@ -528,19 +528,19 @@ if(QGC_CUSTOM_BUILD)
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CUSTOM_INCLUDE_DIRECTORIES})
 endif()
 
-file(GLOB TS_SOURCES ${CMAKE_SOURCE_DIR}/translations/qgc_*.ts)
-set_source_files_properties(${TS_SOURCES} PROPERTIES OUTPUT_LOCATION "${CMAKE_BINARY_DIR}/i18n")
-qt_add_translations(${CMAKE_PROJECT_NAME}
+#file(GLOB TS_SOURCES ${CMAKE_SOURCE_DIR}/translations/qgc_*.ts)
+#set_source_files_properties(${TS_SOURCES} PROPERTIES OUTPUT_LOCATION "${CMAKE_BINARY_DIR}/i18n")
+#qt_add_translations(${CMAKE_PROJECT_NAME}
     # TS_FILE_BASE ${CMAKE_PROJECT_NAME}
     # TS_FILE_DIR ${CMAKE_SOURCE_DIR}/translations/
-    TS_FILES ${TS_SOURCES}
+ #   TS_FILES ${TS_SOURCES}
     # TS_FILES_OUTPUT_VARIABLE
     # QM_FILES_OUTPUT_VARIABLE
     # TARGETS ${CMAKE_PROJECT_NAME}
     # SOURCE_TARGETS ${CMAKE_PROJECT_NAME}
-    RESOURCE_PREFIX "/"
-    LUPDATE_OPTIONS -no-obsolete
-)
+  #  RESOURCE_PREFIX "/"
+   # LUPDATE_OPTIONS -no-obsolete
+#)
 
 set_source_files_properties(resources/qtquickcontrols2.conf PROPERTIES QT_RESOURCE_ALIAS qtquickcontrols2.conf)
 set_source_files_properties(${SDL_GAMECONTROLLERDB_PATH} PROPERTIES QT_RESOURCE_ALIAS gamecontrollerdb.txt)

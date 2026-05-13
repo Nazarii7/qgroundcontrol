@@ -7,6 +7,8 @@ qt_add_qml_module(FlightDisplayModule
     QML_FILES
         CustomGuidedActionsController.qml
         DefaultChecklist.qml
+        DropControlPanel.qml
+        DropControlRow.qml
         FixedWingChecklist.qml
         FlightDisplayViewDummy.qml
         FlightDisplayViewGStreamer.qml
@@ -59,9 +61,13 @@ qt_add_qml_module(FlightDisplayModule
         QGCVideoBackground.qml
         RoverChecklist.qml
         SubChecklist.qml
+        ServoToggle.qml
         TelemetryValuesBar.qml
         TerrainProgress.qml
         VehicleWarnings.qml
         VirtualJoystick.qml
-    NO_PLUGIN # Required by Qt 6.6.3. TODO: Remove when no longer supported.
+    SOURCES
+        DropWidgetSettings.h
+        DropWidgetSettings.cpp
+    NO_PLUGIN
 )
