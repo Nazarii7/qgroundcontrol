@@ -20,9 +20,11 @@ Item {
     property real settingsRowHeight: 30
 
     property int activeDropCount: 0
+    property int availableServoCount: 0
     property bool settingsOpen: false
     property bool panelExpanded: true
     property bool panelLocked: true
+    property bool holdActive: false
 
     property bool useSavedPanelPosition: false
     property real savedPanelX: -1
@@ -32,16 +34,18 @@ Item {
     property real panelY: topOffset
 
     readonly property real settingsPopupHeight: settingsOpen ? 220 : 0
+    readonly property real holdButtonHeight: 44
     readonly property real bodySpacing: 10
     readonly property real bodyHeight: bodyContent.implicitHeight
     readonly property real expandedPanelHeight: 24 + headerHeight + bodySpacing + bodyHeight
     readonly property real collapsedPanelHeight: 52
 
-    signal toggleRequested(int rowIndex)
     signal visibilityToggleRequested(int rowIndex)
     signal settingsOpenChangedFromUi(bool open)
     signal panelExpandedChangedFromUi(bool expanded)
-   signal panelPositionChangedFromUi(real x, real y)
+    signal panelPositionChangedFromUi(real x, real y)
+    signal holdPressed()
+    signal holdReleased()
 
     function clamp(value, minValue, maxValue) {
         return Math.max(minValue, Math.min(maxValue, value))
@@ -51,9 +55,11 @@ Item {
         if (event.pixelDelta && event.pixelDelta.y !== 0) {
             return event.pixelDelta.y
         }
+
         if (event.angleDelta && event.angleDelta.y !== 0) {
             return event.angleDelta.y / 120 * 40
         }
+
         return 0
     }
 
@@ -64,6 +70,7 @@ Item {
         }
 
         const delta = wheelDeltaToPixels(event)
+
         if (delta === 0) {
             event.accepted = true
             return
@@ -74,7 +81,6 @@ Item {
         event.accepted = true
     }
 
-    // Expanded state
     Rectangle {
         id: dropPanel
         visible: control.panelExpanded
@@ -87,82 +93,99 @@ Item {
         border.width: 1
         border.color: Qt.rgba(1, 1, 1, 0.16)
 
-        MouseArea {
-            id: dragArea
-            anchors.fill: parent
-            enabled: !control.panelLocked
-            acceptedButtons: Qt.LeftButton
-            propagateComposedEvents: true
-            hoverEnabled: true
-            cursorShape: !control.panelLocked ? Qt.SizeAllCursor : Qt.ArrowCursor
-            z: -1
-
-            property real pressXInRoot: 0
-            property real pressYInRoot: 0
-            property real startPanelX: 0
-            property real startPanelY: 0
-
-            onPressed: function(mouse) {
-                const p = dragArea.mapToItem(control, mouse.x, mouse.y)
-                pressXInRoot = p.x
-                pressYInRoot = p.y
-                startPanelX = control.panelX
-                startPanelY = control.panelY
-                mouse.accepted = true
-            }
-
-            onPositionChanged: function(mouse) {
-                if (!pressed || control.panelLocked) {
-                    return
-                }
-
-                const p = dragArea.mapToItem(control, mouse.x, mouse.y)
-                const dx = p.x - pressXInRoot
-                const dy = p.y - pressYInRoot
-
-                const maxX = Math.max(0, control.width - dropPanel.width)
-                const maxY = Math.max(0, control.height - dropPanel.height)
-
-                control.panelX = Math.max(0, Math.min(maxX, startPanelX + dx))
-                control.panelY = Math.max(0, Math.min(maxY, startPanelY + dy))
-                control.panelPositionChangedFromUi(control.panelX, control.panelY)
-
-                mouse.accepted = true
-            }
-        }
-
         Column {
             anchors.fill: parent
             anchors.margins: 12
             spacing: control.bodySpacing
 
             Rectangle {
-                id: headerRect
+                id: header
                 width: parent.width
                 height: control.headerHeight
-                radius: 9
-                color: Qt.rgba(1, 1, 1, 0.06)
+                radius: 10
+                color: Qt.rgba(1, 1, 1, 0.07)
                 border.width: 1
                 border.color: Qt.rgba(1, 1, 1, 0.10)
 
-                RowLayout {
+                MouseArea {
+                    id: dragArea
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 12
-                    spacing: 8
+                    enabled: !control.panelLocked
+                    acceptedButtons: Qt.LeftButton
+                    hoverEnabled: true
+                    cursorShape: !control.panelLocked ? Qt.SizeAllCursor : Qt.ArrowCursor
 
-                    Label {
-                        text: "Drops"
-                        color: "white"
-                        font.pixelSize: 17
-                        font.bold: true
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                        verticalAlignment: Text.AlignVCenter
+                    property real pressXInRoot: 0
+                    property real pressYInRoot: 0
+                    property real startPanelX: 0
+                    property real startPanelY: 0
+
+                    onPressed: function(mouse) {
+                        const p = dragArea.mapToItem(control, mouse.x, mouse.y)
+                        pressXInRoot = p.x
+                        pressYInRoot = p.y
+                        startPanelX = control.panelX
+                        startPanelY = control.panelY
+                        mouse.accepted = true
                     }
 
-                    Item {
+                    onPositionChanged: function(mouse) {
+                        if (!pressed || control.panelLocked) {
+                            return
+                        }
+
+                        const p = dragArea.mapToItem(control, mouse.x, mouse.y)
+                        const dx = p.x - pressXInRoot
+                        const dy = p.y - pressYInRoot
+
+                        const maxX = Math.max(control.margin, control.width - dropPanel.width - control.margin)
+                        const maxY = Math.max(control.margin, control.height - dropPanel.height - control.margin)
+
+                        control.panelX = clamp(startPanelX + dx, control.margin, maxX)
+                        control.panelY = clamp(startPanelY + dy, control.margin, maxY)
+
+                        mouse.accepted = true
+                    }
+
+                    onReleased: function(mouse) {
+                        control.panelPositionChangedFromUi(control.panelX, control.panelY)
+                        mouse.accepted = true
+                    }
+
+                    onCanceled: {
+                        control.panelPositionChangedFromUi(control.panelX, control.panelY)
+                    }
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    Column {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 1
+
+                        Label {
+                            text: "Drops"
+                            color: "white"
+                            font.pixelSize: 15
+                            font.bold: true
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
+
+                        Label {
+                            text: control.activeDropCount > 0
+                                  ? (control.activeDropCount + " selected")
+                                  : "No selected channels"
+                            color: Qt.rgba(1, 1, 1, 0.62)
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
                     }
 
                     Rectangle {
@@ -170,9 +193,7 @@ Item {
                         Layout.preferredWidth: 34
                         Layout.preferredHeight: 28
                         radius: 7
-                        color: lockButtonArea.pressed
-                               ? Qt.rgba(1, 1, 1, 0.18)
-                               : Qt.rgba(1, 1, 1, 0.08)
+                        color: lockButtonArea.pressed ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
                         border.width: 1
                         border.color: Qt.rgba(1, 1, 1, 0.10)
 
@@ -199,32 +220,14 @@ Item {
                         radius: 7
                         color: settingsButtonArea.pressed
                                ? Qt.rgba(1, 1, 1, 0.20)
-                               : (control.settingsOpen
-                                  ? Qt.rgba(1, 1, 1, 0.22)
-                                  : Qt.rgba(1, 1, 1, 0.08))
+                               : (control.settingsOpen ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(1, 1, 1, 0.08))
                         border.width: 1
-                        border.color: control.settingsOpen
-                                      ? Qt.rgba(1, 1, 1, 0.28)
-                                      : Qt.rgba(1, 1, 1, 0.10)
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 180
-                            }
-                        }
-
-                        Behavior on border.color {
-                            ColorAnimation {
-                                duration: 180
-                            }
-                        }
+                        border.color: control.settingsOpen ? Qt.rgba(1, 1, 1, 0.28) : Qt.rgba(1, 1, 1, 0.10)
 
                         Label {
                             anchors.centerIn: parent
                             text: "\u2699"
-                            color: control.settingsOpen
-                                   ? Qt.rgba(1, 1, 1, 1.0)
-                                   : Qt.rgba(1, 1, 1, 0.85)
+                            color: control.settingsOpen ? Qt.rgba(1, 1, 1, 1.0) : Qt.rgba(1, 1, 1, 0.85)
                             font.pixelSize: 16
                             font.bold: true
                         }
@@ -243,9 +246,7 @@ Item {
                         Layout.preferredWidth: 34
                         Layout.preferredHeight: 28
                         radius: 7
-                        color: collapseButtonArea.pressed
-                               ? Qt.rgba(1, 1, 1, 0.18)
-                               : Qt.rgba(1, 1, 1, 0.08)
+                        color: collapseButtonArea.pressed ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
                         border.width: 1
                         border.color: Qt.rgba(1, 1, 1, 0.10)
 
@@ -291,7 +292,7 @@ Item {
                         spacing: 8
 
                         Label {
-                            text: "Visible servo channels"
+                            text: "Available servo channels"
                             color: "white"
                             font.pixelSize: 13
                             font.bold: true
@@ -299,8 +300,18 @@ Item {
                             width: parent.width
                         }
 
+                        Label {
+                            visible: control.availableServoCount <= 0
+                            width: parent.width
+                            text: "No available channels. Connect vehicle and wait for parameters."
+                            color: Qt.rgba(1, 1, 1, 0.62)
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                        }
+
                         Flickable {
                             id: settingsFlick
+                            visible: control.availableServoCount > 0
                             width: parent.width
                             height: parent.height - 30
                             clip: true
@@ -311,15 +322,14 @@ Item {
 
                             WheelHandler {
                                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+
                                 onWheel: function(event) {
                                     control.scrollFlickable(settingsFlick, event)
                                 }
                             }
 
                             ScrollBar.vertical: ScrollBar {
-                                policy: settingsColumn.height > settingsFlick.height
-                                        ? ScrollBar.AlwaysOn
-                                        : ScrollBar.AlwaysOff
+                                policy: settingsColumn.height > settingsFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                             }
 
                             Column {
@@ -334,9 +344,13 @@ Item {
                                         required property int index
                                         required property int servoNumber
                                         required property bool active
+                                        required property bool servoAvailable
+                                        required property string availabilityText
 
                                         width: settingsColumn.width
-                                        height: control.settingsRowHeight
+                                        height: servoAvailable ? control.settingsRowHeight : 0
+                                        visible: servoAvailable
+                                        opacity: servoAvailable ? 1.0 : 0.0
 
                                         Rectangle {
                                             anchors.fill: parent
@@ -351,14 +365,27 @@ Item {
                                                 anchors.rightMargin: 10
                                                 spacing: 10
 
-                                                Label {
-                                                    text: "SERVO " + servoNumber
-                                                    color: "white"
-                                                    font.pixelSize: 12
+                                                Column {
                                                     Layout.fillWidth: true
                                                     Layout.alignment: Qt.AlignVCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    horizontalAlignment: Text.AlignLeft
+                                                    spacing: 1
+
+                                                    Label {
+                                                        text: "SERVO " + servoNumber
+                                                        color: "white"
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                        width: parent.width
+                                                    }
+
+                                                    Label {
+                                                        text: "Available"
+                                                        color: Qt.rgba(0.55, 1.0, 0.62, 0.80)
+                                                        font.pixelSize: 9
+                                                        elide: Text.ElideRight
+                                                        width: parent.width
+                                                    }
                                                 }
 
                                                 Item {
@@ -369,7 +396,9 @@ Item {
                                                     CheckBox {
                                                         id: visibleCheck
                                                         anchors.centerIn: parent
-                                                        checked: active
+                                                        checked: active && servoAvailable
+                                                        enabled: servoAvailable
+                                                        opacity: servoAvailable ? 1.0 : 0.35
 
                                                         indicator: Rectangle {
                                                             implicitWidth: 14
@@ -378,9 +407,7 @@ Item {
                                                             radius: 2
                                                             border.width: 1
                                                             border.color: Qt.rgba(1, 1, 1, 0.35)
-                                                            color: visibleCheck.checked
-                                                                   ? Qt.rgba(1, 1, 1, 0.95)
-                                                                   : Qt.rgba(1, 1, 1, 0.08)
+                                                            color: visibleCheck.checked ? Qt.rgba(1, 1, 1, 0.95) : Qt.rgba(1, 1, 1, 0.08)
 
                                                             Rectangle {
                                                                 anchors.centerIn: parent
@@ -402,6 +429,53 @@ Item {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: holdButton
+                    width: parent.width
+                    height: control.holdButtonHeight
+                    radius: 10
+                    enabled: control.activeDropCount > 0
+                    opacity: enabled ? 1.0 : 0.45
+                    color: control.holdActive
+                           ? Qt.rgba(0.42, 0.08, 0.08, 0.95)
+                           : Qt.rgba(0.10, 0.34, 0.14, 0.95)
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                    Behavior on color {
+                        ColorAnimation { duration: 160 }
+                    }
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: control.holdActive ? "RELEASE TO CLOSE" : "HOLD TO DROP"
+                        color: "white"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+                    MouseArea {
+                        id: holdButtonArea
+                        anchors.fill: parent
+                        enabled: holdButton.enabled
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+
+                        onPressed: function(mouse) {
+                            control.holdPressed()
+                            mouse.accepted = true
+                        }
+
+                        onReleased: function(mouse) {
+                            control.holdReleased()
+                            mouse.accepted = true
+                        }
+
+                        onCanceled: {
+                            control.holdReleased()
                         }
                     }
                 }
@@ -429,10 +503,12 @@ Item {
                                 required property bool active
                                 required property bool isOpen
                                 required property bool busy
+                                required property bool servoAvailable
+                                required property string availabilityText
 
                                 width: rowsViewport.width
-                                height: active ? control.rowAnimatedHeight : 0
-                                opacity: active ? 1.0 : 0.0
+                                height: active && servoAvailable ? control.rowAnimatedHeight : 0
+                                opacity: active && servoAvailable ? 1.0 : 0.0
                                 visible: height > 0 || opacity > 0
 
                                 Behavior on height {
@@ -443,9 +519,7 @@ Item {
                                 }
 
                                 Behavior on opacity {
-                                    NumberAnimation {
-                                        duration: 180
-                                    }
+                                    NumberAnimation { duration: 180 }
                                 }
 
                                 DropControlRow {
@@ -454,19 +528,15 @@ Item {
                                     anchors.top: parent.top
 
                                     rowIndex: index
-                                    titleText: control.dropTitleProvider
-                                               ? control.dropTitleProvider(servoNumber)
-                                               : ("DROP " + index)
+                                    titleText: control.dropTitleProvider ? control.dropTitleProvider(servoNumber) : ("DROP " + index)
                                     subtitleText: "SERVO " + servoNumber
                                     rowHeight: control.rowHeight
                                     rowAnimatedHeight: control.rowAnimatedHeight
                                     rowActive: active
                                     rowIsOpen: isOpen
                                     rowBusy: busy
-
-                                    onToggleRequested: function(requestedIndex) {
-                                        control.toggleRequested(requestedIndex)
-                                    }
+                                    rowAvailable: servoAvailable
+                                    rowUnavailableText: availabilityText
                                 }
                             }
                         }
@@ -483,7 +553,6 @@ Item {
         }
     }
 
-    // Collapsed state: only plus button
     Rectangle {
         id: collapsedHandle
         visible: !control.panelExpanded

@@ -521,6 +521,10 @@ if(QGC_BUILD_TESTING)
     add_subdirectory(test)
 endif()
 
+if(WIN32 AND MSVC AND TARGET SDL2-static)
+    target_compile_options(SDL2-static PRIVATE /FIstdint.h)
+endif()
+
 if(QGC_CUSTOM_BUILD)
     find_package(Qt6 REQUIRED COMPONENTS ${CUSTOM_QT_COMPONENTS})
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${CUSTOM_SOURCES})

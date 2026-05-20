@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QSettings>
 #include <QString>
+#include <QVariantMap>
 
 class DropWidgetSettings : public QObject
 {
@@ -30,6 +31,8 @@ class DropWidgetSettings : public QObject
 
     bool panelExpanded() const;
     void setPanelExpanded(bool value);
+
+    Q_INVOKABLE QVariantMap servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const;
 
    signals:
     void activeServosChanged();

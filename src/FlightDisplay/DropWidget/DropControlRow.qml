@@ -16,7 +16,8 @@ Item {
     property real rowHeight: 54
     property real rowAnimatedHeight: 58
 
-    signal toggleRequested(int rowIndex)
+    property bool rowAvailable: true
+    property string rowUnavailableText: ""
 
     width: 320
     height: rowHeight
@@ -30,6 +31,7 @@ Item {
         color: Qt.rgba(1, 1, 1, 0.05)
         border.width: 1
         border.color: Qt.rgba(1, 1, 1, 0.10)
+        opacity: rowRoot.rowAvailable ? 1.0 : 0.55
 
         RowLayout {
             anchors.fill: parent
@@ -43,14 +45,16 @@ Item {
 
                 Label {
                     text: rowRoot.titleText
-                    color: "white"
+                    color: rowRoot.rowAvailable ? "white" : Qt.rgba(1, 1, 1, 0.55)
                     font.pixelSize: 15
                     font.bold: true
                 }
 
                 Label {
                     text: rowRoot.subtitleText
-                    color: Qt.rgba(1, 1, 1, 0.65)
+                    color: rowRoot.rowAvailable
+                           ? Qt.rgba(1, 1, 1, 0.65)
+                           : Qt.rgba(1.0, 0.55, 0.55, 0.85)
                     font.pixelSize: 11
                 }
             }
@@ -59,13 +63,28 @@ Item {
                 Layout.fillWidth: true
             }
 
-            ServoToggle {
+            Rectangle {
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                checked: rowRoot.rowIsOpen
-                busy: rowRoot.rowBusy
-                enabled: !rowRoot.rowBusy
+                Layout.preferredWidth: 74
+                Layout.preferredHeight: 30
+                radius: 15
+                color: rowRoot.rowIsOpen
+                       ? Qt.rgba(0.42, 0.08, 0.08, 0.95)
+                       : Qt.rgba(0.10, 0.34, 0.14, 0.95)
+                border.width: 1
+                border.color: Qt.rgba(1, 1, 1, 0.12)
 
-                onClicked: rowRoot.toggleRequested(rowRoot.rowIndex)
+                Behavior on color {
+                    ColorAnimation { duration: 160 }
+                }
+
+                Label {
+                    anchors.centerIn: parent
+                    text: rowRoot.rowIsOpen ? "OPEN" : "CLOSED"
+                    color: "white"
+                    font.pixelSize: 10
+                    font.bold: true
+                }
             }
         }
     }

@@ -7,8 +7,10 @@ qt_add_qml_module(FlightDisplayModule
     QML_FILES
         CustomGuidedActionsController.qml
         DefaultChecklist.qml
-        DropControlPanel.qml
-        DropControlRow.qml
+        DropWidget/DropWidgetController.qml
+        DropWidget/DropControlPanel.qml
+        DropWidget/DropControlRow.qml
+        DropWidget/ServoToggle.qml
         FixedWingChecklist.qml
         FlightDisplayViewDummy.qml
         FlightDisplayViewGStreamer.qml
@@ -55,19 +57,20 @@ qt_add_qml_module(FlightDisplayModule
         PreFlightGPSCheck.qml
         PreFlightRCCheck.qml
         PreFlightSensorsHealthCheck.qml
-        PreFlightSoundCheck.qml
         ProximityRadarValues.qml
         ProximityRadarVideoView.qml
         QGCVideoBackground.qml
         RoverChecklist.qml
         SubChecklist.qml
-        ServoToggle.qml
         TelemetryValuesBar.qml
         TerrainProgress.qml
         VehicleWarnings.qml
         VirtualJoystick.qml
-    SOURCES
+    NO_PLUGIN
+)
+
+target_sources(${CMAKE_PROJECT_NAME}
+    PRIVATE
         DropWidgetSettings.h
         DropWidgetSettings.cpp
-    NO_PLUGIN
 )
