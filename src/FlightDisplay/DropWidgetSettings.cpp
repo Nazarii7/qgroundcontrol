@@ -11,6 +11,8 @@ static constexpr const char* kActiveServosKey  = "DropWidget/ActiveServos";
 static constexpr const char* kPanelXKey        = "DropWidget/PanelX";
 static constexpr const char* kPanelYKey        = "DropWidget/PanelY";
 static constexpr const char* kPanelExpandedKey = "DropWidget/PanelExpanded";
+static constexpr const char* kDropModeKey      = "DropWidget/DropMode";
+static constexpr const char* kServoOrderKey    = "DropWidget/ServoOrder";
 
 static QString servoFunctionParamName(int servoNumber)
 {
@@ -162,6 +164,38 @@ void DropWidgetSettings::setPanelExpanded(bool value)
     _settings.setValue(kPanelExpandedKey, value);
     _settings.sync();
     emit panelExpandedChanged();
+}
+
+int DropWidgetSettings::dropMode() const
+{
+    return _settings.value(kDropModeKey, 0).toInt();
+}
+
+void DropWidgetSettings::setDropMode(int value)
+{
+    if (dropMode() == value) {
+        return;
+    }
+
+    _settings.setValue(kDropModeKey, value);
+    _settings.sync();
+    emit dropModeChanged();
+}
+
+QString DropWidgetSettings::servoOrder() const
+{
+    return _settings.value(kServoOrderKey, QString()).toString();
+}
+
+void DropWidgetSettings::setServoOrder(const QString& value)
+{
+    if (servoOrder() == value) {
+        return;
+    }
+
+    _settings.setValue(kServoOrderKey, value);
+    _settings.sync();
+    emit servoOrderChanged();
 }
 
 QVariantMap DropWidgetSettings::servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const

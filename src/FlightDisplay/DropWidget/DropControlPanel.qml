@@ -26,6 +26,14 @@ Item {
     property bool panelLocked: true
     property bool holdActive: false
 
+    property int dropMode: 0
+    property int dropModeAll: 0
+    property int dropModeGroups: 1
+    property int dropModeIndividual: 2
+    property string currentDropLabel: ""
+    property string nextDropLabel: "Next: All selected"
+    property var sequenceOrderedTargets: []
+
     property bool useSavedPanelPosition: false
     property real savedPanelX: -1
     property real savedPanelY: -1
@@ -33,7 +41,30 @@ Item {
     property real panelX: Math.max(0, control.width - panelWidth - margin)
     property real panelY: topOffset
 
-    readonly property real settingsPopupHeight: settingsOpen ? 220 : 0
+    readonly property bool hasAvailableServos: availableServoCount > 0
+    readonly property bool hasDropOrderSection: hasAvailableServos && activeDropCount > 1
+
+    property bool dropModeSectionOpen: true
+    property bool dropOrderSectionOpen: true
+    property bool availableChannelsSectionOpen: true
+
+    readonly property real settingsSectionHeaderHeight: 28
+    readonly property real settingsPopupMaxHeight: 400
+
+    readonly property real availableChannelsContentHeight: availableServoCount > 0
+                                                         ? Math.max(settingsRowHeight, availableServoCount * (settingsRowHeight + 6) - 6)
+                                                         : 0
+
+    readonly property real availableChannelsMaxHeight: hasDropOrderSection && dropOrderSectionOpen ? 165 : 235
+
+    readonly property real availableChannelsListHeight: availableChannelsSectionOpen
+                                                      ? Math.min(availableChannelsMaxHeight, availableChannelsContentHeight)
+                                                      : 0
+
+    readonly property real settingsPopupContentHeight: settingsPopupContent.implicitHeight + 20
+    readonly property real settingsPopupHeight: settingsOpen
+                                               ? Math.min(settingsPopupMaxHeight, settingsPopupContentHeight)
+                                               : 0
     readonly property real holdButtonHeight: 44
     readonly property real bodySpacing: 10
     readonly property real bodyHeight: bodyContent.implicitHeight
@@ -46,6 +77,8 @@ Item {
     signal panelPositionChangedFromUi(real x, real y)
     signal holdPressed()
     signal holdReleased()
+    signal dropModeChangedFromUi(int mode)
+    signal sequenceOrderMoveRequested(int servoNumber, int direction)
 
     function clamp(value, minValue, maxValue) {
         return Math.max(minValue, Math.min(maxValue, value))
@@ -287,21 +320,101 @@ Item {
                     visible: height > 0 || opacity > 0
 
                     Column {
+                        id: settingsPopupContent
+
                         anchors.fill: parent
                         anchors.margins: 10
                         spacing: 8
 
-                        Label {
-                            text: "Available servo channels"
-                            color: "white"
-                            font.pixelSize: 13
-                            font.bold: true
-                            elide: Text.ElideRight
+                        DropModeSelector {
+                            id: dropModeSelector
+
                             width: parent.width
+                            visible: control.hasAvailableServos
+                            height: visible ? implicitHeight : 0
+
+                            sectionOpen: control.dropModeSectionOpen
+                            currentMode: control.dropMode
+
+                            onSectionToggleRequested: {
+                                control.dropModeSectionOpen = !control.dropModeSectionOpen
+                            }
+
+                            onModeSelected: function(mode) {
+                                control.dropModeChangedFromUi(mode)
+                            }
+                        }
+
+                        DropSequenceEditor {
+                            id: dropSequenceEditor
+
+                            width: parent.width
+                            visible: control.hasDropOrderSection
+                            height: visible ? implicitHeight : 0
+
+                            enabled: !control.holdActive
+                            opacity: enabled ? 1.0 : 0.45
+
+                            sectionOpen: control.dropOrderSectionOpen
+                            orderedTargets: control.sequenceOrderedTargets
+
+                            onSectionToggleRequested: {
+                                control.dropOrderSectionOpen = !control.dropOrderSectionOpen
+                            }
+
+                            onMoveRequested: function(servoNumber, direction) {
+                                control.sequenceOrderMoveRequested(servoNumber, direction)
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: control.settingsSectionHeaderHeight
+                            color: "transparent"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 8
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: "Available servo channels"
+                                    color: "white"
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Item {
+                                    visible: control.hasAvailableServos
+
+                                    Layout.preferredWidth: 20
+                                    Layout.preferredHeight: 24
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: control.availableChannelsSectionOpen ? "−" : "+"
+                                        color: "white"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: availableChannelsGearArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+
+                                        onClicked: {
+                                            control.availableChannelsSectionOpen = !control.availableChannelsSectionOpen
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         Label {
-                            visible: control.availableServoCount <= 0
+                           visible: control.availableServoCount <= 0
                             width: parent.width
                             text: "No available channels. Connect vehicle and wait for parameters."
                             color: Qt.rgba(1, 1, 1, 0.62)
@@ -311,14 +424,12 @@ Item {
 
                         Flickable {
                             id: settingsFlick
-                            visible: control.availableServoCount > 0
+                            visible: control.availableServoCount > 0 && control.availableChannelsSectionOpen
                             width: parent.width
-                            height: parent.height - 30
+                            height: visible ? control.availableChannelsListHeight : 0
                             clip: true
                             contentWidth: width
-                            contentHeight: settingsColumn.height
-                            boundsBehavior: Flickable.StopAtBounds
-                            interactive: contentHeight > height
+                            contentHeight: settingsColumn.implicitHeight
 
                             WheelHandler {
                                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -329,7 +440,7 @@ Item {
                             }
 
                             ScrollBar.vertical: ScrollBar {
-                                policy: settingsColumn.height > settingsFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                policy: settingsColumn.implicitHeight > settingsFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                             }
 
                             Column {
@@ -392,27 +503,35 @@ Item {
                                                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                                                     Layout.preferredWidth: 18
                                                     Layout.preferredHeight: 18
-
                                                     CheckBox {
                                                         id: visibleCheck
-                                                        anchors.centerIn: parent
+
+                                                        anchors.fill: parent
+                                                        padding: 0
+                                                        spacing: 0
+
                                                         checked: active && servoAvailable
                                                         enabled: servoAvailable
                                                         opacity: servoAvailable ? 1.0 : 0.35
 
                                                         indicator: Rectangle {
-                                                            implicitWidth: 14
-                                                            implicitHeight: 14
+                                                            width: 16
+                                                            height: 16
                                                             anchors.centerIn: parent
+
                                                             radius: 2
                                                             border.width: 1
                                                             border.color: Qt.rgba(1, 1, 1, 0.35)
-                                                            color: visibleCheck.checked ? Qt.rgba(1, 1, 1, 0.95) : Qt.rgba(1, 1, 1, 0.08)
+
+                                                            color: visibleCheck.checked
+                                                                   ? Qt.rgba(1, 1, 1, 0.95)
+                                                                   : Qt.rgba(1, 1, 1, 0.08)
 
                                                             Rectangle {
+                                                                width: 8
+                                                                height: 8
                                                                 anchors.centerIn: parent
-                                                                width: 7
-                                                                height: 7
+
                                                                 radius: 1
                                                                 visible: visibleCheck.checked
                                                                 color: Qt.rgba(0.08, 0.10, 0.13, 1.0)
@@ -421,7 +540,9 @@ Item {
 
                                                         contentItem: Item { }
 
-                                                        onClicked: control.visibilityToggleRequested(index)
+                                                        onClicked: {
+                                                            control.visibilityToggleRequested(index)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -430,6 +551,33 @@ Item {
                                 }
                             }
                         }
+                    }
+                }
+
+                Rectangle {
+                    id: dropStepInfo
+                    width: parent.width
+                    height: 30
+                    radius: 8
+                    color: Qt.rgba(1, 1, 1, 0.06)
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.08)
+                    visible: control.activeDropCount > 0
+
+                    Label {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        verticalAlignment: Text.AlignVCenter
+                        text: control.holdActive && control.currentDropLabel.length > 0
+                              ? control.currentDropLabel
+                              : control.nextDropLabel
+                        color: control.holdActive
+                               ? Qt.rgba(1, 1, 1, 0.95)
+                               : Qt.rgba(1, 1, 1, 0.72)
+                        font.pixelSize: 10
+                        font.bold: control.holdActive
+                        elide: Text.ElideRight
                     }
                 }
 

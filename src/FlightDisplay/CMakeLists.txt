@@ -10,6 +10,9 @@ qt_add_qml_module(FlightDisplayModule
         DropWidget/DropWidgetController.qml
         DropWidget/DropControlPanel.qml
         DropWidget/DropControlRow.qml
+        DropWidget/DropModeSelector.qml
+        DropWidget/DropSequenceController.qml
+        DropWidget/DropSequenceEditor.qml
         DropWidget/ServoToggle.qml
         FixedWingChecklist.qml
         FlightDisplayViewDummy.qml

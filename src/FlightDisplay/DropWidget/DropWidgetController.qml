@@ -16,6 +16,16 @@ Item {
     property bool panelExpanded: true
     property bool holdActive: false
 
+    readonly property int dropModeAll: 0
+    readonly property int dropModeGroups: 1
+    readonly property int dropModeIndividual: 2
+
+    property int dropMode: dropModeAll
+    property string currentDropLabel: ""
+    property string nextDropLabel: "Next: All selected"
+    property var sequenceOrderedTargets: []
+    property var _currentHoldTargets: []
+
     property int activeDropCount: 0
     property int availableServoCount: 0
 
@@ -27,25 +37,37 @@ Item {
     readonly property int _mavCmdDoSetServo: 183
     readonly property int _autopilotComponentId: 1
     readonly property int _servoCommandTimeoutMs: 2000
+    readonly property int _commandRepeatIntervalMs: 5000
+    readonly property int _maxCommandRepeatCount: 3
+
+    property int _openRepeatCount: 0
+    property int _closedRepeatCount: 0
 
     property var _servoCommandQueue: []
     property bool _servoCommandInProgress: false
 
     onActiveVehicleChanged: {
         resetHoldState()
+        closedRepeatTimer.stop()
         clearServoCommandQueue()
+        loadDropMode()
         refreshServoAvailability()
         loadActiveServos()
+        loadServoOrder()
         pruneUnavailableActiveServos()
         syncModelCounters()
+        restartClosedRepeatTimer()
     }
 
     Component.onCompleted: {
         loadPanelState()
+        loadDropMode()
         refreshServoAvailability()
         loadActiveServos()
+        loadServoOrder()
         pruneUnavailableActiveServos()
         syncModelCounters()
+        restartClosedRepeatTimer()
     }
 
     function dropTitleForServo(servoNumber) {
@@ -62,8 +84,131 @@ Item {
         panelY = DropWidgetSettings.panelY
     }
 
+    function parseServoOrder(raw) {
+        var result = []
+
+        if (!raw || raw.length <= 0) {
+            return result
+        }
+
+        var parts = raw.split(",")
+
+        for (var i = 0; i < parts.length; i++) {
+            var servoNumber = parseInt(parts[i])
+
+            if (!isNaN(servoNumber)) {
+                result.push(servoNumber)
+            }
+        }
+
+        return result
+    }
+
+    function servoOrderToString(order) {
+        if (!order || order.length <= 0) {
+            return ""
+        }
+
+        var result = []
+
+        for (var i = 0; i < order.length; i++) {
+            result.push(order[i])
+        }
+
+        return result.join(",")
+    }
+
+    function loadDropMode() {
+        var savedMode = DropWidgetSettings.dropMode
+
+        if (savedMode !== dropModeAll &&
+            savedMode !== dropModeGroups &&
+            savedMode !== dropModeIndividual) {
+            savedMode = dropModeAll
+        }
+
+        dropMode = savedMode
+        dropSequenceController.setDropMode(savedMode)
+
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        console.log("DROP_WIDGET_LOAD_MODE", savedMode)
+    }
+
+    function loadServoOrder() {
+        if (!hasResolvedServoAvailability()) {
+            return
+        }
+
+        var raw = DropWidgetSettings.servoOrder
+        var order = parseServoOrder(raw)
+
+        console.log("DROP_WIDGET_LOAD_SERVO_ORDER", raw)
+
+        dropSequenceController.setServoOrder(order)
+
+        sequenceOrderedTargets = dropSequenceController.orderedTargetsPreview
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+    }
+
+    function saveServoOrder() {
+        if (!hasResolvedServoAvailability()) {
+            return
+        }
+
+        var targets = dropSequenceController.selectedTargets()
+        var order = []
+
+        for (var i = 0; i < targets.length; i++) {
+            order.push(targets[i].servoNumber)
+        }
+
+        var raw = servoOrderToString(order)
+
+        console.log("DROP_WIDGET_SAVE_SERVO_ORDER", raw)
+
+        DropWidgetSettings.servoOrder = raw
+    }
+
     function setSettingsOpen(open) {
         settingsOpen = open
+    }
+
+    function setDropMode(mode) {
+        if (mode !== dropModeAll &&
+            mode !== dropModeGroups &&
+            mode !== dropModeIndividual) {
+            return
+        }
+
+        dropMode = mode
+        dropSequenceController.setDropMode(mode)
+
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        DropWidgetSettings.dropMode = mode
+
+        console.log("DROP_WIDGET_MODE_CHANGED", mode)
+    }
+
+    function moveServoInSequence(servoNumber, direction) {
+        if (holdActive) {
+            console.warn("DROP_WIDGET_SEQUENCE: cannot change order while hold is active")
+            return
+        }
+
+        dropSequenceController.moveServoInOrder(servoNumber, direction)
+
+        sequenceOrderedTargets = dropSequenceController.orderedTargetsPreview
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        saveServoOrder()
+
+        console.log("DROP_WIDGET_SEQUENCE_MOVE", servoNumber, direction)
     }
 
     function setPanelExpanded(expanded) {
@@ -206,6 +351,11 @@ Item {
 
         activeDropCount = activeTotal
         availableServoCount = availableTotal
+
+        dropSequenceController.updateSequenceInfo()
+        sequenceOrderedTargets = dropSequenceController.orderedTargetsPreview
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
     }
 
     function toggleServoVisibility(rowIndex) {
@@ -228,6 +378,13 @@ Item {
 
         syncModelCounters()
         saveActiveServos()
+
+        dropSequenceController.resetSequence()
+        sequenceOrderedTargets = dropSequenceController.orderedTargetsPreview
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        saveServoOrder()
     }
 
     function setDropBusy(rowIndex, busy) {
@@ -244,6 +401,10 @@ Item {
 
     function resetHoldState() {
         holdActive = false
+        _openRepeatCount = 0
+        _closedRepeatCount = 0
+        holdOpenRepeatTimer.stop()
+        closedRepeatTimer.stop()
 
         for (var i = 0; i < dropModel.count; i++) {
             dropModel.setProperty(i, "isOpen", false)
@@ -255,6 +416,10 @@ Item {
         _servoCommandQueue = []
         _servoCommandInProgress = false
         servoCommandTimeoutTimer.stop()
+    }
+
+    function clearPendingServoCommands() {
+        _servoCommandQueue = []
     }
 
     function queueServoCommand(servoNumber, pwmValue) {
@@ -341,6 +506,55 @@ Item {
         return sent
     }
 
+    function sendServoTargetsState(targets, openState, markBusy) {
+        if (!activeVehicle) {
+            console.warn("DROP_WIDGET_TARGETS: no active vehicle")
+            return false
+        }
+
+        if (!targets || targets.length <= 0) {
+            console.warn("DROP_WIDGET_TARGETS: no targets")
+            return false
+        }
+
+        var sent = false
+
+        for (var i = 0; i < targets.length; i++) {
+            var target = targets[i]
+            var targetPwm = openState ? target.openPwm : target.closedPwm
+
+            if (markBusy) {
+                setDropBusy(target.rowIndex, true)
+            }
+
+            setDropOpen(target.rowIndex, openState)
+
+            if (queueServoCommand(target.servoNumber, targetPwm)) {
+                sent = true
+            }
+
+            if (markBusy) {
+                setDropBusy(target.rowIndex, false)
+            }
+        }
+
+        return sent
+    }
+
+    function shouldMaintainClosedState() {
+        return !!activeVehicle && !holdActive && activeDropCount > 0
+    }
+
+    function restartClosedRepeatTimer() {
+        _closedRepeatCount = 0
+
+        if (shouldMaintainClosedState()) {
+            closedRepeatTimer.restart()
+        } else {
+            closedRepeatTimer.stop()
+        }
+    }
+
     function holdDropPressed() {
         if (activeDropCount <= 0) {
             console.warn("DROP_WIDGET_HOLD: no selected servo channels")
@@ -351,10 +565,27 @@ Item {
             return
         }
 
-        console.log("DROP_WIDGET_HOLD_OPEN")
+        var targets = dropSequenceController.currentTargets()
+
+        if (!targets || targets.length <= 0) {
+            console.warn("DROP_WIDGET_HOLD: no targets for current drop mode")
+            return
+        }
+
+        console.log("DROP_WIDGET_HOLD_OPEN", dropSequenceController.currentActionLabel)
         holdActive = true
 
-        sendSelectedServosState(true, true)
+        _currentHoldTargets = targets
+        currentDropLabel = dropSequenceController.currentActionLabel
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        _openRepeatCount = 0
+        _closedRepeatCount = 0
+
+        closedRepeatTimer.stop()
+        clearPendingServoCommands()
+
+        sendServoTargetsState(_currentHoldTargets, true, true)
         holdOpenRepeatTimer.restart()
     }
 
@@ -367,7 +598,19 @@ Item {
         holdActive = false
 
         holdOpenRepeatTimer.stop()
+        _openRepeatCount = 0
+
+        clearPendingServoCommands()
+
         sendSelectedServosState(false, true)
+
+        _currentHoldTargets = []
+        currentDropLabel = ""
+
+        dropSequenceController.advanceSequence()
+        nextDropLabel = dropSequenceController.nextActionLabel
+
+        restartClosedRepeatTimer()
     }
 
     Timer {
@@ -395,12 +638,19 @@ Item {
 
     Timer {
         id: holdOpenRepeatTimer
-        interval: 5000
+        interval: _commandRepeatIntervalMs
         repeat: true
         running: false
 
         onTriggered: {
             if (!holdActive) {
+                _openRepeatCount = 0
+                stop()
+                return
+            }
+
+            if (_openRepeatCount >= _maxCommandRepeatCount) {
+                console.log("DROP_WIDGET_HOLD_REPEAT_DONE")
                 stop()
                 return
             }
@@ -410,8 +660,47 @@ Item {
                 return
             }
 
-            console.log("DROP_WIDGET_HOLD_REPEAT_OPEN")
-            sendSelectedServosState(true, true)
+            _openRepeatCount++
+            console.log("DROP_WIDGET_HOLD_REPEAT_OPEN", _openRepeatCount, "of", _maxCommandRepeatCount)
+            sendServoTargetsState(_currentHoldTargets, true, true)
+
+            if (_openRepeatCount >= _maxCommandRepeatCount) {
+                stop()
+            }
+        }
+    }
+
+    Timer {
+        id: closedRepeatTimer
+        interval: _commandRepeatIntervalMs
+        repeat: true
+        running: false
+
+        onTriggered: {
+            if (!shouldMaintainClosedState()) {
+                _closedRepeatCount = 0
+                stop()
+                return
+            }
+
+            if (_closedRepeatCount >= _maxCommandRepeatCount) {
+                console.log("DROP_WIDGET_CLOSED_REPEAT_DONE")
+                stop()
+                return
+            }
+
+            if (_servoCommandInProgress || _servoCommandQueue.length > 0) {
+                console.log("DROP_WIDGET_CLOSED_REPEAT_SKIP queue busy")
+                return
+            }
+
+            _closedRepeatCount++
+            console.log("DROP_WIDGET_CLOSED_REPEAT", _closedRepeatCount, "of", _maxCommandRepeatCount)
+            sendSelectedServosState(false, false)
+
+            if (_closedRepeatCount >= _maxCommandRepeatCount) {
+                stop()
+            }
         }
     }
 
@@ -430,6 +719,34 @@ Item {
         ListElement { servoNumber: 10; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO10_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO10_FUNCTION" }
         ListElement { servoNumber: 11; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO11_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO11_FUNCTION" }
         ListElement { servoNumber: 12; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO12_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO12_FUNCTION" }
+    }
+
+    DropSequenceController {
+        id: dropSequenceController
+
+        dropModel: dropModel
+        dropMode: controller.dropMode
+
+        onNextActionLabelChanged: {
+            controller.nextDropLabel = nextActionLabel
+        }
+
+        onCurrentActionLabelChanged: {
+            controller.currentDropLabel = currentActionLabel
+        }
+
+        onOrderedTargetsPreviewChanged: {
+            controller.sequenceOrderedTargets = orderedTargetsPreview
+        }
+
+        onSequenceChanged: {
+            controller.sequenceOrderedTargets = orderedTargetsPreview
+            controller.nextDropLabel = nextActionLabel
+
+            if (controller.holdActive) {
+                controller.currentDropLabel = currentActionLabel
+            }
+        }
     }
 
     Connections {
@@ -466,8 +783,8 @@ Item {
         function onParametersReadyChanged() {
             refreshServoAvailability()
             loadActiveServos()
-            pruneUnavailableActiveServos()
-            syncModelCounters()
+            loadServoOrder()
+            restartClosedRepeatTimer()
         }
     }
 }

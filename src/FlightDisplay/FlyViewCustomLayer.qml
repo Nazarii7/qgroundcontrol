@@ -90,6 +90,23 @@ Item {
         panelExpanded: dropWidgetController.panelExpanded
         holdActive: dropWidgetController.holdActive
 
+        dropMode: dropWidgetController.dropMode
+        dropModeAll: dropWidgetController.dropModeAll
+        dropModeGroups: dropWidgetController.dropModeGroups
+        dropModeIndividual: dropWidgetController.dropModeIndividual
+
+        currentDropLabel: dropWidgetController.currentDropLabel
+        nextDropLabel: dropWidgetController.nextDropLabel
+        sequenceOrderedTargets: dropWidgetController.sequenceOrderedTargets
+
+        onDropModeChangedFromUi: function(mode) {
+            dropWidgetController.setDropMode(mode)
+        }
+
+        onSequenceOrderMoveRequested: function(servoNumber, direction) {
+            dropWidgetController.moveServoInSequence(servoNumber, direction)
+        }
+
         onSettingsOpenChangedFromUi: function(open) {
             dropWidgetController.setSettingsOpen(open)
         }

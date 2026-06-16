@@ -13,6 +13,8 @@ class DropWidgetSettings : public QObject
     Q_PROPERTY(double panelX READ panelX WRITE setPanelX NOTIFY panelXChanged FINAL)
     Q_PROPERTY(double panelY READ panelY WRITE setPanelY NOTIFY panelYChanged FINAL)
     Q_PROPERTY(bool panelExpanded READ panelExpanded WRITE setPanelExpanded NOTIFY panelExpandedChanged FINAL)
+    Q_PROPERTY(int dropMode READ dropMode WRITE setDropMode NOTIFY dropModeChanged FINAL)
+    Q_PROPERTY(QString servoOrder READ servoOrder WRITE setServoOrder NOTIFY servoOrderChanged FINAL)
 
    public:
     explicit DropWidgetSettings(QObject* parent = nullptr);
@@ -32,6 +34,12 @@ class DropWidgetSettings : public QObject
     bool panelExpanded() const;
     void setPanelExpanded(bool value);
 
+    int dropMode() const;
+    void setDropMode(int value);
+
+    QString servoOrder() const;
+    void setServoOrder(const QString& value);
+
     Q_INVOKABLE QVariantMap servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const;
 
    signals:
@@ -39,6 +47,9 @@ class DropWidgetSettings : public QObject
     void panelXChanged();
     void panelYChanged();
     void panelExpandedChanged();
+
+    void dropModeChanged();
+    void servoOrderChanged();
 
    private:
     QSettings _settings;
