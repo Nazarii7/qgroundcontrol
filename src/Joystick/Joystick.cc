@@ -20,6 +20,7 @@
 #include "QmlObjectListModel.h"
 #include "SettingsManager.h"
 #include "Vehicle.h"
+#include "FlightDisplay/DropWidgetJoystickBridge.h"
 
 #include <QtCore/QSettings>
 #include <QtCore/QThread>
@@ -991,6 +992,16 @@ void Joystick::setCalibrationMode(bool calibrating)
 
 void Joystick::_executeButtonAction(const QString &action, bool buttonDown)
 {
+    if (action == _buttonActionDropHold) {
+        if (buttonDown) {
+            DropWidgetJoystickBridge::instance()->triggerDropHoldPressed();
+        } else {
+            DropWidgetJoystickBridge::instance()->triggerDropHoldReleased();
+        }
+
+        return;
+    }
+
     if (!_activeVehicle || !_activeVehicle->joystickEnabled() || (action == _buttonActionNone)) {
         return;
     }
@@ -1203,6 +1214,7 @@ void Joystick::_buildActionList(Vehicle *activeVehicle)
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionGimbalYawLock));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionGimbalYawFollow));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionEmergencyStop));
+    _assignableButtonActions->append(new AssignableButtonAction(_buttonActionDropHold));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionGripperGrab));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionGripperRelease));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionLandingGearDeploy));

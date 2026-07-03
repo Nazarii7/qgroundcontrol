@@ -13,6 +13,11 @@ Item {
     property bool rowIsOpen: false
     property bool rowBusy: false
 
+    property int rowCurrentPwm: 1000
+    property string rowCurrentPositionLabel: "Closed"
+    property int rowNextOpenPwm: 2000
+    property string rowNextPositionLabel: "P1"
+
     property real rowHeight: 54
     property real rowAnimatedHeight: 58
 
@@ -40,6 +45,7 @@ Item {
             spacing: 10
 
             Column {
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 1
 
@@ -48,26 +54,26 @@ Item {
                     color: rowRoot.rowAvailable ? "white" : Qt.rgba(1, 1, 1, 0.55)
                     font.pixelSize: 15
                     font.bold: true
+                    elide: Text.ElideRight
+                    width: parent.width
                 }
 
                 Label {
-                    text: rowRoot.subtitleText
+                    text: rowRoot.subtitleText + " · Next " + rowRoot.rowNextPositionLabel + " " + rowRoot.rowNextOpenPwm
                     color: rowRoot.rowAvailable
                            ? Qt.rgba(1, 1, 1, 0.65)
                            : Qt.rgba(1.0, 0.55, 0.55, 0.85)
                     font.pixelSize: 11
+                    elide: Text.ElideRight
+                    width: parent.width
                 }
-            }
-
-            Item {
-                Layout.fillWidth: true
             }
 
             Rectangle {
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                Layout.preferredWidth: 74
-                Layout.preferredHeight: 30
-                radius: 15
+                Layout.preferredWidth: 88
+                Layout.preferredHeight: 32
+                radius: 16
                 color: rowRoot.rowIsOpen
                        ? Qt.rgba(0.42, 0.08, 0.08, 0.95)
                        : Qt.rgba(0.10, 0.34, 0.14, 0.95)
@@ -78,12 +84,25 @@ Item {
                     ColorAnimation { duration: 160 }
                 }
 
-                Label {
+                Column {
                     anchors.centerIn: parent
-                    text: rowRoot.rowIsOpen ? "OPEN" : "CLOSED"
-                    color: "white"
-                    font.pixelSize: 10
-                    font.bold: true
+                    spacing: 0
+
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: rowRoot.rowIsOpen ? rowRoot.rowCurrentPositionLabel : "CLOSED"
+                        color: "white"
+                        font.pixelSize: 9
+                        font.bold: true
+                    }
+
+                    Label {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: String(rowRoot.rowCurrentPwm)
+                        color: Qt.rgba(1, 1, 1, 0.82)
+                        font.pixelSize: 9
+                        font.bold: true
+                    }
                 }
             }
         }

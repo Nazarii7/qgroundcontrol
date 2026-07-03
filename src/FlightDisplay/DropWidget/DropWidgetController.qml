@@ -40,6 +40,11 @@ Item {
     readonly property int _commandRepeatIntervalMs: 5000
     readonly property int _maxCommandRepeatCount: 3
 
+    readonly property int _minPwm: 800
+    readonly property int _maxPwm: 2200
+    readonly property int _defaultClosedPwm: 1000
+    readonly property int _defaultOpenPwm: 2000
+
     property int _openRepeatCount: 0
     property int _closedRepeatCount: 0
 
@@ -51,6 +56,7 @@ Item {
         closedRepeatTimer.stop()
         clearServoCommandQueue()
         loadDropMode()
+        loadServoPwmPositions()
         refreshServoAvailability()
         loadActiveServos()
         loadServoOrder()
@@ -62,6 +68,7 @@ Item {
     Component.onCompleted: {
         loadPanelState()
         loadDropMode()
+        loadServoPwmPositions()
         refreshServoAvailability()
         loadActiveServos()
         loadServoOrder()
@@ -82,6 +89,305 @@ Item {
         panelExpanded = DropWidgetSettings.panelExpanded
         panelX = DropWidgetSettings.panelX
         panelY = DropWidgetSettings.panelY
+    }
+
+    function clampPwm(value, fallbackValue) {
+        var parsed = parseInt(value)
+
+        if (isNaN(parsed)) {
+            parsed = fallbackValue
+        }
+
+        if (parsed < _minPwm) {
+            return _minPwm
+        }
+
+        if (parsed > _maxPwm) {
+            return _maxPwm
+        }
+
+        return parsed
+    }
+
+    function parseOpenPositions(raw, fallbackPwm) {
+        var positions = []
+
+        if (raw && raw.length > 0) {
+            try {
+                var parsed = JSON.parse(raw)
+
+                if (parsed && parsed.length !== undefined) {
+                    for (var i = 0; i < parsed.length; i++) {
+                        positions.push(clampPwm(parsed[i], fallbackPwm))
+                    }
+                }
+            } catch (e) {
+                console.warn("DROP_WIDGET_PWM: invalid row positions json", raw, e)
+            }
+        }
+
+        if (positions.length <= 0) {
+            positions.push(clampPwm(fallbackPwm, _defaultOpenPwm))
+        }
+
+        return positions
+    }
+
+    function positionsToJson(positions) {
+        var sanitized = []
+
+        for (var i = 0; positions && i < positions.length; i++) {
+            sanitized.push(clampPwm(positions[i], _defaultOpenPwm))
+        }
+
+        if (sanitized.length <= 0) {
+            sanitized.push(_defaultOpenPwm)
+        }
+
+        return JSON.stringify(sanitized)
+    }
+
+    function pwmTargetForRow(row) {
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+        var index = row.currentPositionIndex
+
+        if (index < 0) {
+            index = 0
+        }
+
+        return positions[index % positions.length]
+    }
+
+    function pwmLabelForRow(row) {
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+        var index = row.currentPositionIndex
+
+        if (index < 0) {
+            index = 0
+        }
+
+        return "P" + ((index % positions.length) + 1)
+    }
+
+    function syncRowPwmPreview(rowIndex) {
+        if (rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        var row = dropModel.get(rowIndex)
+        var nextPwm = pwmTargetForRow(row)
+        var nextLabel = pwmLabelForRow(row)
+
+        dropModel.setProperty(rowIndex, "nextOpenPwm", nextPwm)
+        dropModel.setProperty(rowIndex, "nextPositionLabel", nextLabel)
+
+        if (!row.isOpen) {
+            dropModel.setProperty(rowIndex, "currentPwm", row.closedPwm)
+            dropModel.setProperty(rowIndex, "currentPositionLabel", "Closed")
+        }
+    }
+
+    function syncAllPwmPreviews() {
+        for (var i = 0; i < dropModel.count; i++) {
+            syncRowPwmPreview(i)
+        }
+    }
+
+    function loadServoPwmPositions() {
+        var raw = DropWidgetSettings.servoPwmPositions
+        var config = {}
+
+        if (raw && raw.length > 0) {
+            try {
+                config = JSON.parse(raw)
+            } catch (e) {
+                console.warn("DROP_WIDGET_PWM_LOAD_INVALID", raw, e)
+                config = {}
+            }
+        }
+
+        for (var i = 0; i < dropModel.count; i++) {
+            var row = dropModel.get(i)
+            var key = String(row.servoNumber)
+            var rowConfig = config[key] || {}
+
+            var closedPwm = clampPwm(rowConfig.closed, row.closedPwm || _defaultClosedPwm)
+            var positions = parseOpenPositions(JSON.stringify(rowConfig.positions || []), row.openPwm || _defaultOpenPwm)
+            var positionsJson = positionsToJson(positions)
+            var currentIndex = row.currentPositionIndex
+
+            if (currentIndex < 0) {
+                currentIndex = 0
+            }
+
+            if (currentIndex >= positions.length) {
+                currentIndex = 0
+            }
+
+            dropModel.setProperty(i, "closedPwm", closedPwm)
+            dropModel.setProperty(i, "openPwm", positions[0])
+            dropModel.setProperty(i, "openPositionsJson", positionsJson)
+            dropModel.setProperty(i, "currentPositionIndex", currentIndex)
+            dropModel.setProperty(i, "currentPwm", row.isOpen ? positions[currentIndex] : closedPwm)
+            dropModel.setProperty(i, "currentPositionLabel", row.isOpen ? ("P" + (currentIndex + 1)) : "Closed")
+            syncRowPwmPreview(i)
+        }
+
+        syncModelCounters()
+    }
+
+    function saveServoPwmPositions() {
+        var config = {}
+
+        for (var i = 0; i < dropModel.count; i++) {
+            var row = dropModel.get(i)
+            config[String(row.servoNumber)] = {
+                "closed": clampPwm(row.closedPwm, _defaultClosedPwm),
+                "positions": parseOpenPositions(row.openPositionsJson, row.openPwm)
+            }
+        }
+
+        var raw = JSON.stringify(config)
+        DropWidgetSettings.servoPwmPositions = raw
+
+        console.log("DROP_WIDGET_PWM_SAVE", raw)
+    }
+
+    function setServoClosedPwm(rowIndex, pwmValue) {
+        if (holdActive || rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        var closedPwm = clampPwm(pwmValue, _defaultClosedPwm)
+
+        dropModel.setProperty(rowIndex, "closedPwm", closedPwm)
+        dropModel.setProperty(rowIndex, "isOpen", false)
+        dropModel.setProperty(rowIndex, "currentPwm", closedPwm)
+        dropModel.setProperty(rowIndex, "currentPositionLabel", "Closed")
+
+        syncRowPwmPreview(rowIndex)
+        saveServoPwmPositions()
+        syncModelCounters()
+    }
+
+    function setServoOpenPositionPwm(rowIndex, positionIndex, pwmValue) {
+        if (holdActive || rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        var row = dropModel.get(rowIndex)
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+
+        if (positionIndex < 0 || positionIndex >= positions.length) {
+            return
+        }
+
+        positions[positionIndex] = clampPwm(pwmValue, row.openPwm)
+
+        dropModel.setProperty(rowIndex, "openPositionsJson", positionsToJson(positions))
+        dropModel.setProperty(rowIndex, "openPwm", positions[0])
+
+        if (row.currentPositionIndex >= positions.length) {
+            dropModel.setProperty(rowIndex, "currentPositionIndex", 0)
+        }
+
+        syncRowPwmPreview(rowIndex)
+        saveServoPwmPositions()
+        syncModelCounters()
+    }
+
+    function addServoOpenPosition(rowIndex) {
+        if (holdActive || rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        var row = dropModel.get(rowIndex)
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+        var lastValue = positions.length > 0 ? positions[positions.length - 1] : _defaultOpenPwm
+
+        positions.push(lastValue)
+
+        dropModel.setProperty(rowIndex, "openPositionsJson", positionsToJson(positions))
+        dropModel.setProperty(rowIndex, "openPwm", positions[0])
+
+        syncRowPwmPreview(rowIndex)
+        saveServoPwmPositions()
+        syncModelCounters()
+    }
+
+    function removeServoOpenPosition(rowIndex, positionIndex) {
+        if (holdActive || rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        var row = dropModel.get(rowIndex)
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+
+        if (positions.length <= 1 || positionIndex < 0 || positionIndex >= positions.length) {
+            return
+        }
+
+        positions.splice(positionIndex, 1)
+
+        var nextIndex = row.currentPositionIndex
+        if (nextIndex >= positions.length) {
+            nextIndex = 0
+        }
+
+        dropModel.setProperty(rowIndex, "openPositionsJson", positionsToJson(positions))
+        dropModel.setProperty(rowIndex, "openPwm", positions[0])
+        dropModel.setProperty(rowIndex, "currentPositionIndex", nextIndex)
+
+        syncRowPwmPreview(rowIndex)
+        saveServoPwmPositions()
+        syncModelCounters()
+    }
+
+    function resetServoPwmPositions(rowIndex) {
+        if (holdActive || rowIndex < 0 || rowIndex >= dropModel.count) {
+            return
+        }
+
+        dropModel.setProperty(rowIndex, "closedPwm", _defaultClosedPwm)
+        dropModel.setProperty(rowIndex, "openPwm", _defaultOpenPwm)
+        dropModel.setProperty(rowIndex, "openPositionsJson", positionsToJson([ _defaultOpenPwm ]))
+        dropModel.setProperty(rowIndex, "currentPositionIndex", 0)
+        dropModel.setProperty(rowIndex, "isOpen", false)
+        dropModel.setProperty(rowIndex, "currentPwm", _defaultClosedPwm)
+        dropModel.setProperty(rowIndex, "currentPositionLabel", "Closed")
+
+        syncRowPwmPreview(rowIndex)
+        saveServoPwmPositions()
+        syncModelCounters()
+    }
+
+    function advancePwmPositionsForTargets(targets) {
+        var advanced = {}
+
+        for (var i = 0; targets && i < targets.length; i++) {
+            var target = targets[i]
+            var key = String(target.rowIndex)
+
+            if (advanced[key]) {
+                continue
+            }
+
+            if (target.rowIndex < 0 || target.rowIndex >= dropModel.count) {
+                continue
+            }
+
+            var row = dropModel.get(target.rowIndex)
+            var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+            var nextIndex = (row.currentPositionIndex + 1) % positions.length
+
+            dropModel.setProperty(target.rowIndex, "currentPositionIndex", nextIndex)
+            syncRowPwmPreview(target.rowIndex)
+
+            advanced[key] = true
+        }
+
+        saveServoPwmPositions()
+        syncModelCounters()
     }
 
     function parseServoOrder(raw) {
@@ -220,13 +526,13 @@ Item {
         panelX = x
         panelY = y
 
-        if (panelX >= 0) {
-            DropWidgetSettings.panelX = panelX
+        if (DropWidgetSettings.setPanelPosition) {
+            DropWidgetSettings.setPanelPosition(x, y)
+            return
         }
 
-        if (panelY >= 0) {
-            DropWidgetSettings.panelY = panelY
-        }
+        DropWidgetSettings.panelX = x
+        DropWidgetSettings.panelY = y
     }
 
     function refreshServoAvailability() {
@@ -270,6 +576,8 @@ Item {
                 dropModel.setProperty(i, "active", false)
                 dropModel.setProperty(i, "isOpen", false)
                 dropModel.setProperty(i, "busy", false)
+                dropModel.setProperty(i, "currentPwm", row.closedPwm)
+                dropModel.setProperty(i, "currentPositionLabel", "Closed")
                 changed = true
             }
         }
@@ -323,6 +631,8 @@ Item {
             if (!shouldBeActive) {
                 dropModel.setProperty(j, "isOpen", false)
                 dropModel.setProperty(j, "busy", false)
+                dropModel.setProperty(j, "currentPwm", row.closedPwm)
+                dropModel.setProperty(j, "currentPositionLabel", "Closed")
             }
         }
 
@@ -336,6 +646,8 @@ Item {
     function syncModelCounters() {
         var activeTotal = 0
         var availableTotal = 0
+
+        syncAllPwmPreviews()
 
         for (var i = 0; i < dropModel.count; i++) {
             var row = dropModel.get(i)
@@ -375,6 +687,8 @@ Item {
         dropModel.setProperty(rowIndex, "active", !row.active)
         dropModel.setProperty(rowIndex, "isOpen", false)
         dropModel.setProperty(rowIndex, "busy", false)
+        dropModel.setProperty(rowIndex, "currentPwm", row.closedPwm)
+        dropModel.setProperty(rowIndex, "currentPositionLabel", "Closed")
 
         syncModelCounters()
         saveActiveServos()
@@ -399,6 +713,13 @@ Item {
         }
     }
 
+    function setDropCurrentPwm(rowIndex, pwmValue, positionLabel) {
+        if (rowIndex >= 0 && rowIndex < dropModel.count) {
+            dropModel.setProperty(rowIndex, "currentPwm", pwmValue)
+            dropModel.setProperty(rowIndex, "currentPositionLabel", positionLabel)
+        }
+    }
+
     function resetHoldState() {
         holdActive = false
         _openRepeatCount = 0
@@ -407,8 +728,11 @@ Item {
         closedRepeatTimer.stop()
 
         for (var i = 0; i < dropModel.count; i++) {
+            var row = dropModel.get(i)
             dropModel.setProperty(i, "isOpen", false)
             dropModel.setProperty(i, "busy", false)
+            dropModel.setProperty(i, "currentPwm", row.closedPwm)
+            dropModel.setProperty(i, "currentPositionLabel", "Closed")
         }
     }
 
@@ -471,9 +795,9 @@ Item {
         servoCommandTimeoutTimer.restart()
     }
 
-    function sendSelectedServosState(openState, markBusy) {
+    function sendSelectedServosClosed(markBusy) {
         if (!activeVehicle) {
-            console.warn("DROP_WIDGET_HOLD: no active vehicle")
+            console.warn("DROP_WIDGET_CLOSE: no active vehicle")
             return false
         }
 
@@ -486,13 +810,14 @@ Item {
                 continue
             }
 
-            var targetPwm = openState ? row.openPwm : row.closedPwm
+            var targetPwm = row.closedPwm
 
             if (markBusy) {
                 setDropBusy(i, true)
             }
 
-            setDropOpen(i, openState)
+            setDropOpen(i, false)
+            setDropCurrentPwm(i, targetPwm, "Closed")
 
             if (queueServoCommand(row.servoNumber, targetPwm)) {
                 sent = true
@@ -506,7 +831,7 @@ Item {
         return sent
     }
 
-    function sendServoTargetsState(targets, openState, markBusy) {
+    function sendServoTargetsOpen(targets, markBusy) {
         if (!activeVehicle) {
             console.warn("DROP_WIDGET_TARGETS: no active vehicle")
             return false
@@ -521,13 +846,15 @@ Item {
 
         for (var i = 0; i < targets.length; i++) {
             var target = targets[i]
-            var targetPwm = openState ? target.openPwm : target.closedPwm
+            var targetPwm = target.openPwm
+            var targetLabel = target.positionLabel || "OPEN"
 
             if (markBusy) {
                 setDropBusy(target.rowIndex, true)
             }
 
-            setDropOpen(target.rowIndex, openState)
+            setDropOpen(target.rowIndex, true)
+            setDropCurrentPwm(target.rowIndex, targetPwm, targetLabel)
 
             if (queueServoCommand(target.servoNumber, targetPwm)) {
                 sent = true
@@ -585,7 +912,7 @@ Item {
         closedRepeatTimer.stop()
         clearPendingServoCommands()
 
-        sendServoTargetsState(_currentHoldTargets, true, true)
+        sendServoTargetsOpen(_currentHoldTargets, true)
         holdOpenRepeatTimer.restart()
     }
 
@@ -602,7 +929,8 @@ Item {
 
         clearPendingServoCommands()
 
-        sendSelectedServosState(false, true)
+        sendSelectedServosClosed(true)
+        advancePwmPositionsForTargets(_currentHoldTargets)
 
         _currentHoldTargets = []
         currentDropLabel = ""
@@ -662,7 +990,7 @@ Item {
 
             _openRepeatCount++
             console.log("DROP_WIDGET_HOLD_REPEAT_OPEN", _openRepeatCount, "of", _maxCommandRepeatCount)
-            sendServoTargetsState(_currentHoldTargets, true, true)
+            sendServoTargetsOpen(_currentHoldTargets, true)
 
             if (_openRepeatCount >= _maxCommandRepeatCount) {
                 stop()
@@ -696,7 +1024,7 @@ Item {
 
             _closedRepeatCount++
             console.log("DROP_WIDGET_CLOSED_REPEAT", _closedRepeatCount, "of", _maxCommandRepeatCount)
-            sendSelectedServosState(false, false)
+            sendSelectedServosClosed(false)
 
             if (_closedRepeatCount >= _maxCommandRepeatCount) {
                 stop()
@@ -707,18 +1035,18 @@ Item {
     ListModel {
         id: dropModel
 
-        ListElement { servoNumber: 1;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO1_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO1_FUNCTION" }
-        ListElement { servoNumber: 2;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO2_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO2_FUNCTION" }
-        ListElement { servoNumber: 3;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO3_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO3_FUNCTION" }
-        ListElement { servoNumber: 4;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO4_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO4_FUNCTION" }
-        ListElement { servoNumber: 5;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO5_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO5_FUNCTION" }
-        ListElement { servoNumber: 6;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO6_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO6_FUNCTION" }
-        ListElement { servoNumber: 7;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO7_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO7_FUNCTION" }
-        ListElement { servoNumber: 8;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO8_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO8_FUNCTION" }
-        ListElement { servoNumber: 9;  closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO9_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO9_FUNCTION" }
-        ListElement { servoNumber: 10; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO10_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO10_FUNCTION" }
-        ListElement { servoNumber: 11; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO11_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO11_FUNCTION" }
-        ListElement { servoNumber: 12; closedPwm: 1000; openPwm: 2000; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO12_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO12_FUNCTION" }
+        ListElement { servoNumber: 1;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO1_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO1_FUNCTION" }
+        ListElement { servoNumber: 2;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO2_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO2_FUNCTION" }
+        ListElement { servoNumber: 3;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO3_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO3_FUNCTION" }
+        ListElement { servoNumber: 4;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO4_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO4_FUNCTION" }
+        ListElement { servoNumber: 5;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO5_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO5_FUNCTION" }
+        ListElement { servoNumber: 6;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO6_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO6_FUNCTION" }
+        ListElement { servoNumber: 7;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO7_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO7_FUNCTION" }
+        ListElement { servoNumber: 8;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO8_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO8_FUNCTION" }
+        ListElement { servoNumber: 9;  closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO9_FUNCTION";  functionValue: -1; availabilityText: "Waiting for SERVO9_FUNCTION" }
+        ListElement { servoNumber: 10; closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO10_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO10_FUNCTION" }
+        ListElement { servoNumber: 11; closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO11_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO11_FUNCTION" }
+        ListElement { servoNumber: 12; closedPwm: 1000; openPwm: 2000; openPositionsJson: "[2000]"; currentPositionIndex: 0; currentPwm: 1000; currentPositionLabel: "Closed"; nextOpenPwm: 2000; nextPositionLabel: "P1"; isOpen: false; busy: false; active: false; servoAvailable: false; functionParamName: "SERVO12_FUNCTION"; functionValue: -1; availabilityText: "Waiting for SERVO12_FUNCTION" }
     }
 
     DropSequenceController {
@@ -787,4 +1115,16 @@ Item {
             restartClosedRepeatTimer()
         }
     }
+
+    Connections {
+          target: DropWidgetJoystickBridge
+
+          function onDropHoldPressed() {
+              controller.holdDropPressed()
+          }
+
+          function onDropHoldReleased() {
+              controller.holdDropReleased()
+          }
+      }
 }

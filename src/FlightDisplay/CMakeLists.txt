@@ -9,11 +9,20 @@ qt_add_qml_module(FlightDisplayModule
         DefaultChecklist.qml
         DropWidget/DropWidgetController.qml
         DropWidget/DropControlPanel.qml
-        DropWidget/DropControlRow.qml
+        DropWidget/ui/DropControlRow.qml
+        DropWidget/ui/DropAvailableServoRow.qml
+        DropWidget/ui/DropAvailableServoList.qml
+        DropWidget/ui/DropActiveRowsList.qml
+        DropWidget/ui/DropCurrentNextLabel.qml
+        DropWidget/ui/DropCollapsedHandle.qml
         DropWidget/DropModeSelector.qml
+        DropWidget/DropPwmPositionEditor.qml
         DropWidget/DropSequenceController.qml
         DropWidget/DropSequenceEditor.qml
         DropWidget/ServoToggle.qml
+        DropWidget/controls/DropIconButton.qml
+        DropWidget/controls/DropHoldButton.qml
+        DropWidget/style/DropStyle.qml
         FixedWingChecklist.qml
         FlightDisplayViewDummy.qml
         FlightDisplayViewGStreamer.qml
@@ -69,6 +78,9 @@ qt_add_qml_module(FlightDisplayModule
         TerrainProgress.qml
         VehicleWarnings.qml
         VirtualJoystick.qml
+    SOURCES
+        DropWidgetJoystickBridge.h
+        DropWidgetJoystickBridge.cpp
     NO_PLUGIN
 )
 

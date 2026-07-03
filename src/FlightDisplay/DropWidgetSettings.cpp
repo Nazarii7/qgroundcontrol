@@ -13,6 +13,7 @@ static constexpr const char* kPanelYKey        = "DropWidget/PanelY";
 static constexpr const char* kPanelExpandedKey = "DropWidget/PanelExpanded";
 static constexpr const char* kDropModeKey      = "DropWidget/DropMode";
 static constexpr const char* kServoOrderKey    = "DropWidget/ServoOrder";
+static constexpr const char* kServoPwmPositionsKey = "DropWidget/ServoPwmPositions";
 
 static QString servoFunctionParamName(int servoNumber)
 {
@@ -150,6 +151,34 @@ void DropWidgetSettings::setPanelY(double value)
     emit panelYChanged();
 }
 
+void DropWidgetSettings::setPanelPosition(double x, double y)
+{
+    const bool xChanged = panelX() != x;
+    const bool yChanged = panelY() != y;
+
+    if (!xChanged && !yChanged) {
+        return;
+    }
+
+    if (xChanged) {
+        _settings.setValue(kPanelXKey, x);
+    }
+
+    if (yChanged) {
+        _settings.setValue(kPanelYKey, y);
+    }
+
+    _settings.sync();
+
+    if (xChanged) {
+        emit panelXChanged();
+    }
+
+    if (yChanged) {
+        emit panelYChanged();
+    }
+}
+
 bool DropWidgetSettings::panelExpanded() const
 {
     return _settings.value(kPanelExpandedKey, true).toBool();
@@ -198,6 +227,22 @@ void DropWidgetSettings::setServoOrder(const QString& value)
     emit servoOrderChanged();
 }
 
+QString DropWidgetSettings::servoPwmPositions() const
+{
+    return _settings.value(kServoPwmPositionsKey, QString()).toString();
+}
+
+void DropWidgetSettings::setServoPwmPositions(const QString& value)
+{
+    if (servoPwmPositions() == value) {
+        return;
+    }
+
+    _settings.setValue(kServoPwmPositionsKey, value);
+    _settings.sync();
+    emit servoPwmPositionsChanged();
+}
+
 QVariantMap DropWidgetSettings::servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const
 {
     const QString paramName = servoFunctionParamName(servoNumber);
@@ -239,7 +284,7 @@ QVariantMap DropWidgetSettings::servoFunctionAvailability(QObject* parameterMana
             QStringLiteral("%1 unavailable").arg(paramName));
     }
 
-   Fact* fact = parameterManager->getParameter(-1, paramName);
+    Fact* fact = parameterManager->getParameter(-1, paramName);
 
     if (!fact) {
         return makeAvailabilityResult(

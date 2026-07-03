@@ -107,6 +107,26 @@ Item {
             dropWidgetController.moveServoInSequence(servoNumber, direction)
         }
 
+        onServoClosedPwmChanged: function(rowIndex, pwmValue) {
+            dropWidgetController.setServoClosedPwm(rowIndex, pwmValue)
+        }
+
+        onServoOpenPositionPwmChanged: function(rowIndex, positionIndex, pwmValue) {
+            dropWidgetController.setServoOpenPositionPwm(rowIndex, positionIndex, pwmValue)
+        }
+
+        onServoOpenPositionAddRequested: function(rowIndex) {
+            dropWidgetController.addServoOpenPosition(rowIndex)
+        }
+
+        onServoOpenPositionRemoveRequested: function(rowIndex, positionIndex) {
+            dropWidgetController.removeServoOpenPosition(rowIndex, positionIndex)
+        }
+
+        onServoPwmResetRequested: function(rowIndex) {
+            dropWidgetController.resetServoPwmPositions(rowIndex)
+        }
+
         onSettingsOpenChangedFromUi: function(open) {
             dropWidgetController.setSettingsOpen(open)
         }

@@ -46,6 +46,64 @@ Item {
         updateSequenceInfo()
     }
 
+    function parseOpenPositions(raw, fallbackPwm) {
+        var result = []
+
+        if (raw && raw.length > 0) {
+            try {
+                var parsed = JSON.parse(raw)
+
+                if (parsed && parsed.length !== undefined) {
+                    for (var i = 0; i < parsed.length; i++) {
+                        var value = parseInt(parsed[i])
+
+                        if (!isNaN(value)) {
+                            result.push(value)
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("DROP_SEQUENCE: invalid positions json", raw, e)
+            }
+        }
+
+        if (result.length <= 0) {
+            result.push(fallbackPwm)
+        }
+
+        return result
+    }
+
+    function pwmForRow(row) {
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+        var index = row.currentPositionIndex
+
+        if (index < 0) {
+            index = 0
+        }
+
+        if (positions.length <= 0) {
+            return row.openPwm
+        }
+
+        return positions[index % positions.length]
+    }
+
+    function labelForRow(row) {
+        var positions = parseOpenPositions(row.openPositionsJson, row.openPwm)
+        var index = row.currentPositionIndex
+
+        if (index < 0) {
+            index = 0
+        }
+
+        if (positions.length <= 0) {
+            return "P1"
+        }
+
+        return "P" + ((index % positions.length) + 1)
+    }
+
     function rawSelectedTargets() {
         var targets = []
 
@@ -60,8 +118,10 @@ Item {
                 targets.push({
                     "rowIndex": i,
                     "servoNumber": row.servoNumber,
-                    "openPwm": row.openPwm,
-                    "closedPwm": row.closedPwm
+                    "openPwm": pwmForRow(row),
+                    "closedPwm": row.closedPwm,
+                    "positionIndex": row.currentPositionIndex,
+                    "positionLabel": labelForRow(row)
                 })
             }
         }
@@ -160,7 +220,7 @@ Item {
         var names = []
 
         for (var i = 0; i < targets.length; i++) {
-            names.push("SERVO " + targets[i].servoNumber)
+            names.push("SERVO " + targets[i].servoNumber + " " + targets[i].positionLabel + " " + targets[i].openPwm)
         }
 
         return names.join(", ")

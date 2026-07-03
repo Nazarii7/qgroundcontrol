@@ -68,6 +68,73 @@ Item {
         source:         QGroundControl.videoManager.uvcEnabled ? "qrc:/qml/QGroundControl/FlightDisplay/FlightDisplayViewUVC.qml" : "qrc:/qml/QGroundControl/FlightDisplay//FlightDisplayViewDummy.qml"
     }
 
+    Item {
+        id: videoCrosshairOverlay
+
+        anchors.fill: parent
+        z: 100
+
+        visible: (QGroundControl.videoManager.isStreamSource && QGroundControl.videoManager.decoding)
+                        || QGroundControl.videoManager.isUvc
+
+        readonly property bool smallVideo: _root.pipState.state !== _root.pipState.fullState
+
+        readonly property real crossSize: smallVideo ? 30 : 46
+        readonly property real lineLength: smallVideo ? 11 : 18
+        readonly property real lineThickness: smallVideo ? 1.5 : 2
+
+        Item {
+            width: videoCrosshairOverlay.crossSize
+            height: videoCrosshairOverlay.crossSize
+            anchors.centerIn: parent
+            opacity: 0.88
+
+            Rectangle {
+                width: videoCrosshairOverlay.lineThickness
+                height: videoCrosshairOverlay.lineLength
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                radius: width / 2
+                color: "white"
+            }
+
+            Rectangle {
+                width: videoCrosshairOverlay.lineThickness
+                height: videoCrosshairOverlay.lineLength
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                radius: width / 2
+                color: "white"
+            }
+
+            Rectangle {
+                width: videoCrosshairOverlay.lineLength
+                height: videoCrosshairOverlay.lineThickness
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                radius: height / 2
+                color: "white"
+            }
+
+            Rectangle {
+                width: videoCrosshairOverlay.lineLength
+                height: videoCrosshairOverlay.lineThickness
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                radius: height / 2
+                color: "white"
+            }
+
+            Rectangle {
+                width: videoCrosshairOverlay.smallVideo ? 3 : 4
+                height: videoCrosshairOverlay.smallVideo ? 3 : 4
+                anchors.centerIn: parent
+                radius: width / 2
+                color: "white"
+            }
+        }
+    }
+
     QGCLabel {
         text: qsTr("Double-click to exit full screen")
         font.pointSize: ScreenTools.largeFontPointSize

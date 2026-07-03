@@ -15,6 +15,7 @@ class DropWidgetSettings : public QObject
     Q_PROPERTY(bool panelExpanded READ panelExpanded WRITE setPanelExpanded NOTIFY panelExpandedChanged FINAL)
     Q_PROPERTY(int dropMode READ dropMode WRITE setDropMode NOTIFY dropModeChanged FINAL)
     Q_PROPERTY(QString servoOrder READ servoOrder WRITE setServoOrder NOTIFY servoOrderChanged FINAL)
+    Q_PROPERTY(QString servoPwmPositions READ servoPwmPositions WRITE setServoPwmPositions NOTIFY servoPwmPositionsChanged FINAL)
 
    public:
     explicit DropWidgetSettings(QObject* parent = nullptr);
@@ -31,6 +32,8 @@ class DropWidgetSettings : public QObject
     double panelY() const;
     void setPanelY(double value);
 
+    Q_INVOKABLE void setPanelPosition(double x, double y);
+
     bool panelExpanded() const;
     void setPanelExpanded(bool value);
 
@@ -39,6 +42,9 @@ class DropWidgetSettings : public QObject
 
     QString servoOrder() const;
     void setServoOrder(const QString& value);
+
+    QString servoPwmPositions() const;
+    void setServoPwmPositions(const QString& value);
 
     Q_INVOKABLE QVariantMap servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const;
 
@@ -50,6 +56,7 @@ class DropWidgetSettings : public QObject
 
     void dropModeChanged();
     void servoOrderChanged();
+    void servoPwmPositionsChanged();
 
    private:
     QSettings _settings;

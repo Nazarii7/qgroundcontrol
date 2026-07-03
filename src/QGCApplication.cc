@@ -70,6 +70,7 @@
 #include "VehicleComponent.h"
 #include "VideoManager.h"
 #include "FlightDisplay/DropWidgetSettings.h"
+#include "FlightDisplay/DropWidgetJoystickBridge.h"
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
 #include "MAVLinkInspectorController.h"
@@ -281,6 +282,7 @@ void QGCApplication::init()
     GPSRtk::registerQmlTypes();
     JoystickManager::registerQmlTypes();
     DropWidgetSettings::registerQmlSingleton();
+    DropWidgetJoystickBridge::registerQmlSingleton();
 #ifdef QGC_VIEWER3D
     Viewer3DManager::registerQmlTypes();
 #endif
