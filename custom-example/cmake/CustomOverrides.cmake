@@ -18,3 +18,11 @@ set(QGC_DISABLE_APM_PLUGIN_FACTORY ON CACHE BOOL "Disable APM Plugin Factory" FO
 
 # We implement our own PX4 plugin factory
 set(QGC_DISABLE_PX4_PLUGIN_FACTORY ON CACHE BOOL "Disable PX4 Plugin Factory" FORCE)
+
+set(
+    QGC_WINDOWS_ICON_PATH
+    "${CMAKE_SOURCE_DIR}/resources/icons/pg_robotics_ground_control.ico"
+    CACHE FILEPATH
+    "Windows Icon Path"
+    FORCE
+)

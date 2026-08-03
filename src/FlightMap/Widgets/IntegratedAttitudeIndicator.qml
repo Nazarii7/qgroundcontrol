@@ -16,8 +16,13 @@ import QGroundControl.FlightDisplay
 import QGroundControl.FlightMap
 
 Item {
+    id: control
+
     implicitWidth:  _totalRadius * 2
     implicitHeight: implicitWidth
+
+    readonly property bool _darkStyle:
+        objectName === "pgrDarkAttitudeIndicator"
 
     property real compassRadius:        ScreenTools.defaultFontPixelHeight * 6 / 2
     property real attitudeAngleDegrees: 0
@@ -37,8 +42,16 @@ Item {
 
     on_AttitudeAnglePercentChanged: angleIndicator.requestPaint()
 
+    on_DarkStyleChanged: {
+        backgroundIndicator.requestPaint()
+        angleIndicator.requestPaint()
+        zeroIndicator.requestPaint()
+    }
+
     // Roll background
     Canvas {
+        id: backgroundIndicator
+
         anchors.fill: parent
 
         onPaint: {
@@ -46,7 +59,11 @@ Item {
             var centerY = height / 2
             var ctx = getContext("2d")
             ctx.reset()
-            ctx.strokeStyle = qgcPal.window
+            ctx.strokeStyle =
+                control._darkStyle
+                    ? Qt.rgba(0.08, 0.10, 0.13, 0.96)
+                    : qgcPal.window
+
             ctx.lineWidth = attitudeSize
             ctx.beginPath()
             ctx.arc(centerX, centerY, _attitudeRadius, _zeroAttitudeRadians - _maxRadians, _zeroAttitudeRadians + _maxRadians)
@@ -80,6 +97,8 @@ Item {
 
     // Roll 0 value tick mark
     Canvas {
+        id: zeroIndicator
+
         anchors.fill: parent
 
         onPaint: {
@@ -87,7 +106,11 @@ Item {
             var centerY = height / 2
             var ctx = getContext("2d")
             ctx.reset()
-            ctx.strokeStyle = qgcPal.text
+            ctx.strokeStyle =
+                control._darkStyle
+                    ? "white"
+                    : qgcPal.text
+
             ctx.lineWidth = 2
             ctx.beginPath()
             ctx.moveTo(centerX, 0)

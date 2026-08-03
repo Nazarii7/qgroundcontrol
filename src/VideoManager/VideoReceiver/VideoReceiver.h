@@ -20,7 +20,7 @@ class VideoReceiver : public QObject
 {
     Q_OBJECT
 
-public:
+   public:
     explicit VideoReceiver(QObject *parent = nullptr)
         : QObject(parent)
     {}
@@ -44,7 +44,7 @@ public:
     void setLowLatency(bool lowLatency) { if (lowLatency != _lowLatency) { _lowLatency = lowLatency; emit lowLatencyChanged(_lowLatency); } }
     void setVideoStreamInfo(QGCVideoStreamInfo *videoStreamInfo) { if (videoStreamInfo != _videoStreamInfo) { _videoStreamInfo = videoStreamInfo; emit videoStreamInfoChanged(); } }
 
-    // QMediaFormat::FileFormat
+            // QMediaFormat::FileFormat
     enum FILE_FORMAT {
         FILE_FORMAT_MIN = 0,
         FILE_FORMAT_MKV = FILE_FORMAT_MIN,
@@ -67,10 +67,26 @@ public:
     Q_ENUM(STATUS)
     static bool isValidStatus(STATUS status) { return ((status >= STATUS_MIN) && (status <= STATUS_MAX)); }
 
-signals:
+            // Optional second decoder branch used by the detached PiP window.
+            // Backends which do not support a shared source pipeline keep the
+            // default STATUS_NOT_IMPLEMENTED behavior.
+    virtual void startDetachedDecoding(void *sink, QQuickItem *widget)
+    {
+        (void) sink;
+        (void) widget;
+        emit onStartDetachedDecodingComplete(STATUS_NOT_IMPLEMENTED);
+    }
+
+    virtual void stopDetachedDecoding()
+    {
+        emit onStopDetachedDecodingComplete(STATUS_NOT_IMPLEMENTED);
+    }
+
+   signals:
     void timeout();
     void streamingChanged(bool active);
     void decodingChanged(bool active);
+    void detachedDecodingChanged(bool active);
     void recordingChanged(bool active);
     void recordingStarted(const QString &filename);
     void videoSizeChanged(QSize size);
@@ -87,11 +103,13 @@ signals:
     void onStopComplete(STATUS status);
     void onStartDecodingComplete(STATUS status);
     void onStopDecodingComplete(STATUS status);
+    void onStartDetachedDecodingComplete(STATUS status);
+    void onStopDetachedDecodingComplete(STATUS status);
     void onStartRecordingComplete(STATUS status);
     void onStopRecordingComplete(STATUS status);
     void onTakeScreenshotComplete(STATUS status);
 
-public slots:
+   public slots:
     virtual void start(uint32_t timeout) = 0;
     virtual void stop() = 0;
     virtual void startDecoding(void *sink) = 0;
@@ -100,7 +118,7 @@ public slots:
     virtual void stopRecording() = 0;
     virtual void takeScreenshot(const QString &imageFile) = 0;
 
-protected:
+   protected:
     void *_sink = nullptr;
     QQuickItem *_widget = nullptr;
     QGCVideoStreamInfo *_videoStreamInfo = nullptr;
@@ -127,8 +145,8 @@ protected:
     uint32_t _timeout = 0;
     QString _recordingOutput;
 
-    // bool _initialized = false;
-    // bool _fullScreen = false;
-    // QSize _videoSize;
-    // QString _imageFile;
+            // bool _initialized = false;
+            // bool _fullScreen = false;
+            // QSize _videoSize;
+            // QString _imageFile;
 };

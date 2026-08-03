@@ -20,9 +20,24 @@ Rectangle {
     width:  size
     height: size
     radius: width / 2
-    color:  qgcPal.window
-    border.color:   qgcPal.text
-    border.width:   usedByMultipleVehicleList ? 1 : 0
+
+    readonly property bool _darkStyle:
+        objectName === "pgrDarkCompass"
+
+    color:
+        _darkStyle
+            ? Qt.rgba(0.08, 0.10, 0.13, 0.96)
+            : qgcPal.window
+
+    border.color:
+        _darkStyle
+            ? Qt.rgba(1.00, 1.00, 1.00, 0.35)
+            : qgcPal.text
+
+    border.width:
+        _darkStyle
+            ? 1
+            : (usedByMultipleVehicleList ? 1 : 0)
     opacity:        vehicle && usedByMultipleVehicleList && !vehicle.armed ? 0.5 : 1
 
     property real size:                         _defaultSize
@@ -59,7 +74,7 @@ Rectangle {
 
     function translateCenterToAngleX(radius, angle) {
         return radius * Math.sin(angle * (Math.PI / 180))
-    } 
+    }
 
     function translateCenterToAngleY(radius, angle) {
         return -radius * Math.cos(angle * (Math.PI / 180))
@@ -78,11 +93,17 @@ Rectangle {
         }
 
         CompassDial {
+            objectName:     root._darkStyle ? "pgrDarkCompassDial" : ""
             anchors.fill:   parent
             visible:        !usedByMultipleVehicleList
         }
 
         CompassHeadingIndicator {
+            objectName:
+                root._darkStyle
+                    ? "pgrDarkCompassHeading"
+                    : ""
+
             compassSize:    size
             heading:        _heading
             simplified:     usedByMultipleVehicleList
@@ -133,7 +154,7 @@ Rectangle {
                 id:                 label
                 text:               qsTr("L")
                 font.bold:          true
-                color:              qgcPal.text
+                color:              root._darkStyle ? "white" : qgcPal.text
                 anchors.centerIn:   parent
             }
 
@@ -151,5 +172,6 @@ Rectangle {
         y:                          size * 0.74
         text:                       vehicle && !usedByMultipleVehicleList ? _heading.toFixed(0) + "°" : ""
         horizontalAlignment:        Text.AlignHCenter
+        color:                      root._darkStyle ? "white" : qgcPal.text
     }
 }

@@ -14,6 +14,9 @@ static constexpr const char* kPanelExpandedKey = "DropWidget/PanelExpanded";
 static constexpr const char* kDropModeKey      = "DropWidget/DropMode";
 static constexpr const char* kServoOrderKey    = "DropWidget/ServoOrder";
 static constexpr const char* kServoPwmPositionsKey = "DropWidget/ServoPwmPositions";
+static constexpr const char* kCameraControlsVisibleKey = "FlyViewWidgets/CameraControlsVisible";
+static constexpr const char* kDropWidgetVisibleKey = "FlyViewWidgets/DropWidgetVisible";
+static constexpr const char* kCameraLogsVisibleKey = "FlyViewWidgets/CameraLogsVisible";
 
 static QString servoFunctionParamName(int servoNumber)
 {
@@ -241,6 +244,54 @@ void DropWidgetSettings::setServoPwmPositions(const QString& value)
     _settings.setValue(kServoPwmPositionsKey, value);
     _settings.sync();
     emit servoPwmPositionsChanged();
+}
+
+bool DropWidgetSettings::cameraControlsVisible() const
+{
+    return _settings.value(kCameraControlsVisibleKey, true).toBool();
+}
+
+void DropWidgetSettings::setCameraControlsVisible(bool value)
+{
+    if (cameraControlsVisible() == value) {
+        return;
+    }
+
+    _settings.setValue(kCameraControlsVisibleKey, value);
+    _settings.sync();
+    emit cameraControlsVisibleChanged();
+}
+
+bool DropWidgetSettings::dropWidgetVisible() const
+{
+    return _settings.value(kDropWidgetVisibleKey, true).toBool();
+}
+
+void DropWidgetSettings::setDropWidgetVisible(bool value)
+{
+    if (dropWidgetVisible() == value) {
+        return;
+    }
+
+    _settings.setValue(kDropWidgetVisibleKey, value);
+    _settings.sync();
+    emit dropWidgetVisibleChanged();
+}
+
+bool DropWidgetSettings::cameraLogsVisible() const
+{
+    return _settings.value(kCameraLogsVisibleKey, true).toBool();
+}
+
+void DropWidgetSettings::setCameraLogsVisible(bool value)
+{
+    if (cameraLogsVisible() == value) {
+        return;
+    }
+
+    _settings.setValue(kCameraLogsVisibleKey, value);
+    _settings.sync();
+    emit cameraLogsVisibleChanged();
 }
 
 QVariantMap DropWidgetSettings::servoFunctionAvailability(QObject* parameterManagerObject, int servoNumber) const

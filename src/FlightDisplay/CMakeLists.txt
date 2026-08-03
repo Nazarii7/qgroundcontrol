@@ -1,4 +1,4 @@
-qt_add_library(FlightDisplayModule STATIC)
+﻿qt_add_library(FlightDisplayModule STATIC)
 
 qt_add_qml_module(FlightDisplayModule
     URI QGroundControl.FlightDisplay
@@ -46,6 +46,10 @@ qt_add_qml_module(FlightDisplayModule
         FlyViewTopRightColumnLayout.qml
         FlyViewTopRightPanel.qml
         FlyViewVideo.qml
+        PGRCamera/PGRCameraMouseController.qml
+        PGRCamera/PGRCameraOverlay.qml
+        PGRCamera/controls/PGRCameraButton.qml
+        PGRCamera/style/PGRCameraStyle.qml
         FlyViewWidgetLayer.qml
         GripperMenu.qml
         GuidedActionConfirm.qml

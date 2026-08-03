@@ -54,6 +54,36 @@ Item {
 
     property bool utmspActTrigger
 
+    // Read-only geometry used by the camera overlay. This keeps CAM directly
+    // below the real Fly View ToolStrip even when its action count changes.
+    readonly property real flyToolStripX: toolStrip.x
+    readonly property real flyToolStripY: toolStrip.y
+    readonly property real flyToolStripWidth: toolStrip.width
+    readonly property real flyToolStripHeight: toolStrip.height
+
+    // ToolStrip.qml uses horizontal Flickable margins of
+    // defaultFontPixelWidth * 0.4 on both sides. Subtract those exact
+    // margins to get the real Takeoff/Return button width.
+    readonly property real flyToolStripButtonWidth:
+        Math.max(
+            1,
+            toolStrip.width
+                - ScreenTools.defaultFontPixelWidth * 0.8
+        )
+
+    readonly property real flyCameraPanelHorizontalPadding: 4
+
+    readonly property real flyCameraPanelOuterWidth:
+        flyToolStripButtonWidth
+            + flyCameraPanelHorizontalPadding * 2
+
+    readonly property real flyCameraPanelX:
+        toolStrip.x
+            + (toolStrip.width - flyCameraPanelOuterWidth) / 2
+
+    readonly property real flyToolStripBottom:
+        toolStrip.y + toolStrip.height + _toolsMargin
+
     QGCToolInsets {
         id:                     _totalToolInsets
         leftEdgeTopInset:       toolStrip.leftEdgeTopInset
@@ -135,8 +165,8 @@ Item {
         visible:                    _virtualJoystickEnabled && !QGroundControl.videoManager.fullScreen && !(_activeVehicle ? _activeVehicle.usingHighLatencyLink : false)
         anchors.bottom:             parent.bottom
         anchors.bottomMargin:       bottomLoaderMargin
-        anchors.left:               parent.left   
-        anchors.leftMargin:         ( y > toolStrip.y + toolStrip.height ? toolStrip.width / 2 : toolStrip.width * 1.05 + toolStrip.x) 
+        anchors.left:               parent.left
+        anchors.leftMargin:         ( y > toolStrip.y + toolStrip.height ? toolStrip.width / 2 : toolStrip.width * 1.05 + toolStrip.x)
         source:                     "qrc:/qml/QGroundControl/FlightDisplay/VirtualJoystick.qml"
         active:                     _virtualJoystickEnabled && !(_activeVehicle ? _activeVehicle.usingHighLatencyLink : false)
 
@@ -145,7 +175,7 @@ Item {
         property bool leftHandedMode:          QGroundControl.settingsManager.appSettings.virtualJoystickLeftHandedMode.rawValue
         property bool _virtualJoystickEnabled: QGroundControl.settingsManager.appSettings.virtualJoystick.rawValue
         property real bottomEdgeRightInset:    parent.height-y
-        property var  _pipViewMargin:          _pipView.visible ? parentToolInsets.bottomEdgeLeftInset + ScreenTools.defaultFontPixelHeight * 2 : 
+        property var  _pipViewMargin:          _pipView.visible ? parentToolInsets.bottomEdgeLeftInset + ScreenTools.defaultFontPixelHeight * 2 :
                                                bottomRightRowLayout.height + ScreenTools.defaultFontPixelHeight * 1.5
 
         property var  bottomLoaderMargin:      _pipViewMargin >= parent.height / 2 ? parent.height / 2 : _pipViewMargin
@@ -162,7 +192,7 @@ Item {
         //Loader status logic
         onLoaded: {
             if (virtualJoystickMultiTouch.visible) {
-                virtualJoystickMultiTouch.item.calibration = true 
+                virtualJoystickMultiTouch.item.calibration = true
                 virtualJoystickMultiTouch.item.uiTotalWidth = rootWidth
                 virtualJoystickMultiTouch.item.uiRealX = itemX
             } else {

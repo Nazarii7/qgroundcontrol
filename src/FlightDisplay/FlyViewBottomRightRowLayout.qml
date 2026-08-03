@@ -16,6 +16,8 @@ import QGroundControl.FlightDisplay
 
 RowLayout {
     TelemetryValuesBar {
+        objectName: "pgrDarkTelemetryBar"
+
         Layout.alignment:       Qt.AlignBottom
         extraWidth:             instrumentPanel.extraValuesWidth
         settingsGroup:          factValueGrid.telemetryBarSettingsGroup

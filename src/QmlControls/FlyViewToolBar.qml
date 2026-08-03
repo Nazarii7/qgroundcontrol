@@ -23,11 +23,42 @@ Rectangle {
     id:     _root
     width:  parent.width
     height: ScreenTools.toolbarHeight
-    color:  qgcPal.toolbarBackground
+
+    // One continuous status gradient across the complete toolbar.
+    // The middle stop keeps the active status hue while darkening it before
+    // the final graphite endpoint.
+    color: _statusGradientDark
+
+    gradient: Gradient {
+        orientation: Gradient.Horizontal
+
+        GradientStop {
+            position: 0.0
+            color: _root._mainStatusBGColor
+        }
+
+        GradientStop {
+            position: 0.45
+            color: Qt.darker(
+                _root._mainStatusBGColor,
+                1.45
+            )
+        }
+
+        GradientStop {
+            position: 1.0
+            color: _root._statusGradientDark
+        }
+    }
 
     property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
     property bool   _communicationLost: _activeVehicle ? _activeVehicle.vehicleLinkManager.communicationLost : false
     property color  _mainStatusBGColor: qgcPal.brandingPurple
+
+    // Dark endpoint for the status gradient. It matches the PGR Camera,
+    // Drop Widget and Settings palette without changing the rest of QGC.
+    readonly property color _statusGradientDark:
+        Qt.rgba(0.08, 0.10, 0.13, 0.96)
 
     function dropMainStatusIndicatorTool() {
         mainStatusIndicator.dropMainStatusIndicator();
@@ -43,17 +74,6 @@ Rectangle {
         height:         1
         color:          "black"
         visible:        qgcPal.globalTheme === QGCPalette.Light
-    }
-
-    Rectangle {
-        anchors.fill: viewButtonRow
-        
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0;                                     color: _mainStatusBGColor }
-            GradientStop { position: currentButton.x + currentButton.width; color: _mainStatusBGColor }
-            GradientStop { position: 1;                                     color: _root.color }
-        }
     }
 
     RowLayout {
@@ -73,6 +93,11 @@ Rectangle {
 
         MainStatusIndicator {
             id: mainStatusIndicator
+
+            // Standard QObject marker. MainStatusIndicator uses it only to
+            // select light content over this dark toolbar background.
+            objectName: "pgrDarkToolbarStatus"
+
             Layout.preferredHeight: viewButtonRow.height
         }
 

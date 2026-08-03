@@ -17,6 +17,7 @@
  */
 
 #include "QGCApplication.h"
+#include "SiYi/SiYi.h"
 
 #include <QtCore/QEvent>
 #include <QtCore/QFile>
@@ -283,6 +284,7 @@ void QGCApplication::init()
     JoystickManager::registerQmlTypes();
     DropWidgetSettings::registerQmlSingleton();
     DropWidgetJoystickBridge::registerQmlSingleton();
+    SiYi::registerQmlSingleton();
 #ifdef QGC_VIEWER3D
     Viewer3DManager::registerQmlTypes();
 #endif

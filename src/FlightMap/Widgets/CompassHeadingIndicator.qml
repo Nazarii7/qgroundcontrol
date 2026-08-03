@@ -25,6 +25,9 @@ Canvas {
     property real heading
     property bool simplified:    false
 
+    readonly property bool _darkStyle:
+        objectName === "pgrDarkCompassHeading"
+
     property var _qgcPal: QGroundControl.globalPalette
 
     Connections {
@@ -32,9 +35,14 @@ Canvas {
         onGlobalThemeChanged:   control.requestPaint()
     }
 
+    on_DarkStyleChanged: control.requestPaint()
+
     onPaint: {
         var ctx = getContext("2d")
-        ctx.strokeStyle = simplified ? "#EE3424" : _qgcPal.text
+        ctx.strokeStyle =
+            simplified
+                ? "#EE3424"
+                : (_darkStyle ? "white" : _qgcPal.text)
         ctx.fillStyle = "#EE3424"
         ctx.lineWidth = 1
         ctx.beginPath()

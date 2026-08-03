@@ -19,11 +19,14 @@ import QGroundControl.Palette
 Item {
     id: control
 
+    readonly property bool _darkStyle:
+        objectName === "pgrDarkCompassDial"
+
     property real offsetRadius: width / 2 - ScreenTools.defaultFontPixelHeight / 2
 
     function translateCenterToAngleX(radius, angle) {
         return radius * Math.sin(angle * (Math.PI / 180))
-    } 
+    }
 
     function translateCenterToAngleY(radius, angle) {
         return -radius * Math.cos(angle * (Math.PI / 180))
@@ -32,6 +35,7 @@ Item {
     QGCLabel {
         anchors.centerIn:   parent
         text:               "N"
+        color:              control._darkStyle ? "white" : qgcPal.text
 
         transform: Translate {
             x: translateCenterToAngleX(control.offsetRadius, 0)
@@ -42,6 +46,7 @@ Item {
     QGCLabel {
         anchors.centerIn:   parent
         text:               "E"
+        color:              control._darkStyle ? "white" : qgcPal.text
 
         transform: Translate {
             x: translateCenterToAngleX(control.offsetRadius, 90)
@@ -52,6 +57,7 @@ Item {
     QGCLabel {
         anchors.centerIn:   parent
         text:               "S"
+        color:              control._darkStyle ? "white" : qgcPal.text
 
         transform: Translate {
             x: translateCenterToAngleX(control.offsetRadius, 180)
@@ -62,6 +68,7 @@ Item {
     QGCLabel {
         anchors.centerIn:   parent
         text:               "W"
+        color:              control._darkStyle ? "white" : qgcPal.text
 
         transform: Translate {
             x: translateCenterToAngleX(control.offsetRadius, 270)
@@ -78,7 +85,10 @@ Item {
             x:                  size / 2
             width:              1
             height:             ScreenTools.defaultFontPixelHeight * 0.5
-            color:              qgcPal.text
+            color:
+                control._darkStyle
+                    ? Qt.rgba(1.00, 1.00, 1.00, 0.86)
+                    : qgcPal.text
 
             transform: Rotation {
                 origin.x:   0
@@ -93,12 +103,15 @@ Item {
         model: 8
 
         Rectangle {
-            id:                 majorTick
+            id:                 minorTick
             x:                  size / 2
             y:                  _margin
             width:              1
             height:             _margin
-            color:              qgcPal.text
+            color:
+                control._darkStyle
+                    ? Qt.rgba(1.00, 1.00, 1.00, 0.86)
+                    : qgcPal.text
 
             property real _margin: ScreenTools.defaultFontPixelHeight * 0.25
 
@@ -108,5 +121,5 @@ Item {
                 angle:      45 / 2 + (45 * index)
             }
         }
-    }    
+    }
 }

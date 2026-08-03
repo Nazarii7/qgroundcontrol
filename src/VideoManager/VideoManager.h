@@ -36,8 +36,12 @@ class VideoManager : public QObject
     Q_PROPERTY(bool     autoStreamConfigured    READ autoStreamConfigured                       NOTIFY autoStreamConfiguredChanged)
     Q_PROPERTY(bool     decoding                READ decoding                                   NOTIFY decodingChanged)
     Q_PROPERTY(bool     fullScreen              READ fullScreen             WRITE setfullScreen NOTIFY fullScreenChanged)
-    Q_PROPERTY(bool     hasThermal              READ hasThermal                                 NOTIFY decodingChanged)
+    Q_PROPERTY(bool     hasThermal              READ hasThermal                                 NOTIFY hasThermalChanged)
+    Q_PROPERTY(bool     hasPgrZt6Substream      READ hasPgrZt6Substream                       NOTIFY hasThermalChanged)
     Q_PROPERTY(bool     hasVideo                READ hasVideo                                   NOTIFY hasVideoChanged)
+    Q_PROPERTY(bool     pgrZt6SubstreamDecoding READ pgrZt6SubstreamDecoding                  NOTIFY pgrZt6SubstreamDecodingChanged)
+    Q_PROPERTY(bool     pgrDetachedStreamDecoding READ pgrDetachedStreamDecoding              NOTIFY pgrDetachedStreamDecodingChanged)
+    Q_PROPERTY(bool     pgrZt6SubstreamEnabled  READ pgrZt6SubstreamEnabled WRITE setPgrZt6SubstreamEnabled NOTIFY pgrZt6SubstreamEnabledChanged)
     Q_PROPERTY(bool     isStreamSource          READ isStreamSource                             NOTIFY isStreamSourceChanged)
     Q_PROPERTY(bool     isUvc                   READ isUvc                                      NOTIFY isUvcChanged)
     Q_PROPERTY(bool     recording               READ recording                                  NOTIFY recordingChanged)
@@ -50,7 +54,7 @@ class VideoManager : public QObject
     Q_PROPERTY(QString  imageFile               READ imageFile                                  NOTIFY imageFileChanged)
     Q_PROPERTY(QString  uvcVideoSourceID        READ uvcVideoSourceID                           NOTIFY uvcVideoSourceIDChanged)
 
-public:
+   public:
     explicit VideoManager(QObject *parent = nullptr);
     ~VideoManager();
 
@@ -62,6 +66,8 @@ public:
     Q_INVOKABLE void startVideo();
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void stopVideo();
+    Q_INVOKABLE void startPgrDetachedStream(bool subStream, QObject *videoItem);
+    Q_INVOKABLE void stopPgrDetachedStream();
 
     void init(QQuickWindow *rootWindow);
     void cleanup();
@@ -69,6 +75,11 @@ public:
     bool decoding() const { return _decoding; }
     bool fullScreen() const { return _fullScreen; }
     bool hasThermal() const;
+    bool hasPgrZt6Substream() const;
+    bool pgrZt6SubstreamDecoding() const { return _pgrZt6SubstreamDecoding; }
+    bool pgrDetachedStreamDecoding() const { return _pgrDetachedStreamDecoding; }
+    bool pgrZt6SubstreamEnabled() const { return _pgrZt6SubstreamEnabled; }
+    Q_INVOKABLE void setPgrZt6SubstreamEnabled(bool enabled);
     bool hasVideo() const;
     bool isStreamSource() const;
     bool isUvc() const;
@@ -86,12 +97,16 @@ public:
     static bool qtmultimediaEnabled();
     static bool uvcEnabled();
 
-signals:
+   signals:
     void aspectRatioChanged();
     void autoStreamConfiguredChanged();
     void decodingChanged();
     void fullScreenChanged();
+    void hasThermalChanged();
     void hasVideoChanged();
+    void pgrZt6SubstreamDecodingChanged();
+    void pgrDetachedStreamDecodingChanged();
+    void pgrZt6SubstreamEnabledChanged();
     void imageFileChanged(const QString &filename);
     void isAutoStreamChanged();
     void isStreamSourceChanged();
@@ -102,19 +117,27 @@ signals:
     void uvcVideoSourceIDChanged();
     void videoSizeChanged();
 
-private slots:
+   private slots:
     void _communicationLostChanged(bool communicationLost);
     void _setActiveVehicle(Vehicle *vehicle);
     void _videoSourceChanged();
 
-private:
+   private:
     void _initVideoReceiver(VideoReceiver *receiver, QQuickWindow *window);
+    bool _initPgrDetachedVideoReceiver(QObject *videoItem);
+    bool _isPgrSharedSourceUri(const QString &uri) const;
+    VideoReceiver *_pgrDetachedRequestedReceiver() const;
+    void _setPgrDetachedStreamDecoding(bool active);
+    void _startRequestedPgrDetachedStream();
+    VideoReceiver *_receiverByName(const QString &name) const;
     bool _updateAutoStream(VideoReceiver *receiver);
     bool _updateUVC(VideoReceiver *receiver);
     bool _updateSettings(VideoReceiver *receiver);
     bool _updateVideoUri(VideoReceiver *receiver, const QString &uri);
+    QString _pgrZt6SubstreamUri() const;
     void _restartAllVideos();
     void _restartVideo(VideoReceiver *receiver);
+    void _restartPgrZt6SubstreamLater();
     void _startReceiver(VideoReceiver *receiver);
     void _stopReceiver(VideoReceiver *receiver);
     static void _cleanupOldVideos();
@@ -129,6 +152,18 @@ private:
     QAtomicInteger<bool> _decoding = false;
     QAtomicInteger<bool> _recording = false;
     QAtomicInteger<bool> _streaming = false;
+    bool _pgrZt6SubstreamDecoding = false;
+    bool _pgrZt6SubstreamEnabled = true;
+    bool _pgrZt6SubstreamRetryPending = false;
+    bool _pgrDetachedStreamDecoding = false;
+    bool _pgrDetachedRequested = false;
+    bool _pgrDetachedRequestedSubStream = false;
+    bool _pgrDetachedRestartAfterStop = false;
+    bool _pgrDetachedUsesSourceBranch = false;
+    QString _pgrDetachedRequestedUri;
+    VideoReceiver *_pgrDetachedVideoReceiver = nullptr;
+    VideoReceiver *_pgrDetachedSourceReceiver = nullptr;
+
     QSize _videoSize;
     QString _imageFile;
     QString _uvcVideoSourceID;
@@ -139,7 +174,7 @@ private:
 
 class FinishVideoInitialization : public QRunnable
 {
-public:
+   public:
     FinishVideoInitialization();
     ~FinishVideoInitialization();
 

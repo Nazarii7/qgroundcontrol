@@ -1,0 +1,13 @@
+﻿target_sources(${CMAKE_PROJECT_NAME}
+    PRIVATE
+        SiYi.cc
+        SiYi.h
+        SiYiCamera.cc
+        SiYiCamera.h
+        SiYiCrcApi.cc
+        SiYiCrcApi.h
+        SiYiTcpClient.cc
+        SiYiTcpClient.h
+        SiYiTransmitter.cc
+        SiYiTransmitter.h
+)

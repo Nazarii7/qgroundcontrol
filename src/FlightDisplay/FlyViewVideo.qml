@@ -14,11 +14,26 @@ import QGroundControl.Controls
 import QGroundControl.Controllers
 import QGroundControl.ScreenTools
 
+import "PGRCamera" as PGRCamera
+
 Item {
     id: _root
 
     property Item pipView
     property Item pipState: videoPipState
+
+    // Actual Fly View ToolStrip geometry, supplied by FlyView.qml.
+    // cameraControlsWidth is the inner Takeoff/Return button width.
+    // Defaults keep the overlay usable if this component is instantiated
+    // elsewhere.
+    property real cameraControlsX:
+        ScreenTools.defaultFontPixelWidth * 0.75
+
+    property real cameraControlsY:
+        ScreenTools.defaultFontPixelWidth * 17
+
+    property real cameraControlsWidth:
+        ScreenTools.defaultFontPixelWidth * 8
 
     property int    _track_rec_x:       0
     property int    _track_rec_y:       0
@@ -57,7 +72,22 @@ Item {
     FlightDisplayViewVideo {
         id:             videoStreaming
         anchors.fill:   parent
+        z:              60
+
         useSmallFont:   _root.pipState.state !== _root.pipState.fullState
+        compactPipMode: _root.pipState.state !== _root.pipState.fullState
+
+        directSiyiMouseControlEnabled:
+            pgrCameraOverlay.controlsVisible
+            && pipState.state === pipState.fullState
+            && !(videoStreaming._camera
+                 && videoStreaming._camera.trackingEnabled)
+
+        onRequestToggleFullScreen: {
+            QGroundControl.videoManager.fullScreen =
+                !QGroundControl.videoManager.fullScreen
+        }
+
         visible:        QGroundControl.videoManager.isStreamSource
     }
     //-- UVC Video (USB Camera or Video Device)
@@ -138,7 +168,9 @@ Item {
     QGCLabel {
         text: qsTr("Double-click to exit full screen")
         font.pointSize: ScreenTools.largeFontPointSize
-        visible: QGroundControl.videoManager.fullScreen && flyViewVideoMouseArea.containsMouse
+        visible: QGroundControl.videoManager.fullScreen
+                 && (flyViewVideoMouseArea.containsMouse
+                     || videoStreaming.directSiyiMouseContainsMouse)
         anchors.centerIn: parent
 
         onVisibleChanged: {
@@ -166,8 +198,10 @@ Item {
 
     MouseArea {
         id:                         flyViewVideoMouseArea
+        z:                          -1
         anchors.fill:               parent
         enabled:                    pipState.state === pipState.fullState
+                            && !videoStreaming.directSiyiMouseControlActive
         hoverEnabled:               true
 
         property double x0:         0
@@ -218,7 +252,7 @@ Item {
         }
         onReleased: (mouse) => {
             onScreenGimbalController.releaseControl()
-            
+
             //if there is already a selection, delete it
             if (trackingROI !== null) {
                 trackingROI.destroy();
@@ -296,7 +330,12 @@ Item {
                         var left = margin_hor + videoStreaming.getWidth() * videoStreaming._camera.trackingImageRect.left
                         var top = margin_ver + videoStreaming.getHeight() * videoStreaming._camera.trackingImageRect.top
                         var right = margin_hor + videoStreaming.getWidth() * videoStreaming._camera.trackingImageRect.right
-                        var bottom = margin_ver + !isNaN(videoStreaming._camera.trackingImageRect.bottom) ? videoStreaming.getHeight() * videoStreaming._camera.trackingImageRect.bottom : top + (right - left)
+                        var bottom =
+                            !isNaN(videoStreaming._camera.trackingImageRect.bottom)
+                                ? margin_ver
+                                  + videoStreaming.getHeight()
+                                  * videoStreaming._camera.trackingImageRect.bottom
+                                : top + (right - left)
                         var width = right - left
                         var height = bottom - top
 
@@ -323,5 +362,21 @@ Item {
     ObstacleDistanceOverlayVideo {
         id: obstacleDistance
         showText: pipState.state === pipState.fullState
+    }
+
+    PGRCamera.PGRCameraOverlay {
+        id: pgrCameraOverlay
+
+        anchors.fill: parent
+        z: 200
+
+        cameraPanelX: _root.cameraControlsX
+        cameraPanelY: _root.cameraControlsY
+        cameraPanelWidth: _root.cameraControlsWidth
+
+        // Keep CAM/debug overlay available for RTSP diagnostics even before decoding starts.
+        visible: (QGroundControl.videoManager.hasVideo || QGroundControl.videoManager.isStreamSource)
+                 && _root.pipState.state === _root.pipState.fullState
+
     }
 }

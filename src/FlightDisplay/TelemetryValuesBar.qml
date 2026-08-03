@@ -1,25 +1,17 @@
-/****************************************************************************
- *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 import QtQuick
 import QtQuick.Layouts
 
 import QGroundControl
-import QGroundControl.ScreenTools
-import QGroundControl.Vehicle
 import QGroundControl.Controls
-import QGroundControl.Palette
+import QGroundControl.ScreenTools
 
 Item {
     id:             control
     implicitWidth:  mainLayout.width + (_toolsMargin * 2)
     implicitHeight: mainLayout.height + (_toolsMargin * 2)
+
+    readonly property bool _darkStyle:
+        objectName === "pgrDarkTelemetryBar"
 
     property real extraWidth: 0 ///< Extra width to add to the background rectangle
 
@@ -31,9 +23,26 @@ Item {
         id:         backgroundRect
         width:      control.width + extraWidth
         height:     control.height
-        color:      qgcPal.window
-        radius:     ScreenTools.defaultFontPixelWidth / 2
-        opacity:    0.75
+        color:
+            control._darkStyle
+                ? Qt.rgba(0.08, 0.10, 0.13, 0.90)
+                : qgcPal.window
+
+        radius:
+            control._darkStyle
+                ? 8
+                : ScreenTools.defaultFontPixelWidth / 2
+
+        opacity:
+            control._darkStyle
+                ? 1.0
+                : 0.75
+
+        border.width: control._darkStyle ? 1 : 0
+        border.color:
+            control._darkStyle
+                ? Qt.rgba(1.00, 1.00, 1.00, 0.16)
+                : "transparent"
     }
 
     ColumnLayout {
@@ -51,7 +60,10 @@ Item {
                 width:              ScreenTools.minTouchPixels * 0.75
                 height:             width
                 sourceSize.width:   width
-                color:              qgcPal.text
+                color:
+                    control._darkStyle
+                        ? "white"
+                        : qgcPal.text
                 fillMode:           Image.PreserveAspectFit
 
                 QGCMouseArea {
@@ -63,6 +75,11 @@ Item {
 
         HorizontalFactValueGrid {
             id: factValueGrid
+
+            objectName:
+                control._darkStyle
+                    ? "pgrDarkTelemetryGrid"
+                    : ""
         }
     }
 
@@ -83,7 +100,7 @@ Item {
             }
         }
 
-        onPressAndHold: {
+        onPressAndHold: (mouse) => {
             factValueGrid.settingsUnlocked = true
             mouse.accepted = true
         }

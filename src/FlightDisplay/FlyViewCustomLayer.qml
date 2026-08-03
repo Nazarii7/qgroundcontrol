@@ -39,7 +39,12 @@ Item {
         leftEdgeCenterInset:    parentToolInsets ? parentToolInsets.leftEdgeCenterInset : 0
         leftEdgeBottomInset:    parentToolInsets ? parentToolInsets.leftEdgeBottomInset : 0
 
-        rightEdgeTopInset:      _panelWidth + _m * 2
+        rightEdgeTopInset:
+            DropWidgetSettings.dropWidgetVisible
+                ? _panelWidth + _m * 2
+                : (parentToolInsets
+                   ? parentToolInsets.rightEdgeTopInset
+                   : 0)
         rightEdgeCenterInset:   parentToolInsets ? parentToolInsets.rightEdgeCenterInset : 0
         rightEdgeBottomInset:   parentToolInsets ? parentToolInsets.rightEdgeBottomInset : 0
 
@@ -63,10 +68,23 @@ Item {
         activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
     }
 
+    Connections {
+        target: DropWidgetSettings
+
+        function onDropWidgetVisibleChanged() {
+            if (!DropWidgetSettings.dropWidgetVisible) {
+                dropWidgetController.holdDropReleased()
+            }
+        }
+    }
+
     DropWidget.DropControlPanel {
         id: dropControlPanel
 
         anchors.fill: parent
+
+        visible: DropWidgetSettings.dropWidgetVisible
+        enabled: visible
 
         dropModel: dropWidgetController.dropModel
         paletteObject: qgcPal

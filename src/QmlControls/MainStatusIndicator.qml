@@ -21,6 +21,9 @@ RowLayout {
     id:         control
     spacing:    ScreenTools.defaultFontPixelWidth
 
+    readonly property bool _darkToolbarStyle:
+        objectName === "pgrDarkToolbarStatus"
+
     property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
     property var    _vehicleInAir:      _activeVehicle ? _activeVehicle.flying || _activeVehicle.landing : false
     property bool   _vtolInFWDFlight:   _activeVehicle ? _activeVehicle.vtolInFwdFlight : false
@@ -41,6 +44,7 @@ RowLayout {
         verticalAlignment:  Text.AlignVCenter
         text:               mainStatusText()
         font.pointSize:     ScreenTools.largeFontPointSize
+        color:              control._darkToolbarStyle ? "white" : qgcPal.text
 
         property string _commLostText:      qsTr("Comms Lost")
         property string _readyToFlyText:    qsTr("Ready To Fly")
@@ -128,7 +132,11 @@ RowLayout {
             //visible:                _activeVehicle && _activeVehicle.messageCount > 0// FIXME: Is messageCount check needed?
 
             function getIconColor() {
-                let iconColor = qgcPal.text
+                let iconColor =
+                    control._darkToolbarStyle
+                        ? "white"
+                        : qgcPal.text
+
                 if (_activeVehicle) {
                     if (_activeVehicle.messageTypeWarning) {
                         iconColor = qgcPal.colorOrange
@@ -152,6 +160,7 @@ RowLayout {
         verticalAlignment:  Text.AlignVCenter
         text:               _vtolInFWDFlight ? qsTr("FW(vtol)") : qsTr("MR(vtol)")
         font.pointSize:     _vehicleInAir ? ScreenTools.largeFontPointSize : ScreenTools.defaultFontPointSize
+        color:              control._darkToolbarStyle ? "white" : qgcPal.text
         visible:            _activeVehicle && _activeVehicle.vtol
 
         QGCMouseArea {
@@ -218,7 +227,7 @@ RowLayout {
                 heading:            qsTr("Vehicle Messages")
                 visible:            !vehicleMessageList.noMessages
 
-                VehicleMessageList { 
+                VehicleMessageList {
                     id: vehicleMessageList
                 }
             }
@@ -304,7 +313,7 @@ RowLayout {
                         textFormat:         TextEdit.RichText
                         clip:               true
                         visible:            object.expanded
-                        
+
                         property var fact:  null
 
                         onLinkActivated: (link) => {
@@ -360,7 +369,7 @@ RowLayout {
                     QGCLabel { Layout.fillWidth: true; text: qsTr("Vehicle Parameters") }
                     QGCButton {
                         text: qsTr("Configure")
-                        onClicked: {                            
+                        onClicked: {
                             mainWindow.showVehicleConfigParametersPage()
                             mainWindow.closeIndicatorDrawer()
                         }
@@ -369,7 +378,7 @@ RowLayout {
                     QGCLabel { Layout.fillWidth: true; text: qsTr("Vehicle Configuration") }
                     QGCButton {
                         text: qsTr("Configure")
-                        onClicked: {                            
+                        onClicked: {
                             mainWindow.showVehicleConfig()
                             mainWindow.closeIndicatorDrawer()
                         }

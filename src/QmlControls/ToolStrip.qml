@@ -67,7 +67,7 @@ Rectangle {
                 anchors.right:          parent.right
                 horizontalAlignment:    Text.AlignHCenter
                 font.pointSize:         ScreenTools.smallFontPointSize
-                visible:                title != ""
+                visible:                title !== ""
             }
 
             Repeater {
@@ -78,7 +78,17 @@ Rectangle {
                     anchors.left:       toolStripColumn.left
                     anchors.right:      toolStripColumn.right
                     height:             width
-                    radius:             ScreenTools.defaultFontPixelWidth / 2
+
+                    objectName:
+                        _root.objectName === "pgrFlyViewToolStrip"
+                            ? "pgrFlyViewToolStripButton"
+                            : ""
+
+                    radius:
+                        objectName === "pgrFlyViewToolStripButton"
+                            ? 7
+                            : ScreenTools.defaultFontPixelWidth / 2
+
                     fontPointSize:      _root.fontSize
                     toolStripAction:    modelData
                     dropPanel:          _dropPanel

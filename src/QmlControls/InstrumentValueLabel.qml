@@ -1,12 +1,3 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -26,7 +17,19 @@ ColumnLayout {
     property var    _rgFontSizeTightHeights:    [ _tightDefaultFontHeight * _rgFontSizeRatios[0] + 2, _tightDefaultFontHeight * _rgFontSizeRatios[1] + 2, _tightDefaultFontHeight * _rgFontSizeRatios[2] + 2, _tightDefaultFontHeight * _rgFontSizeRatios[3] + 2 ]
     property real   _tightHeight:               _rgFontSizeTightHeights[instrumentValueData.factValueGrid.fontSize]
     property bool   _iconVisible:               instrumentValueData.rangeType === InstrumentValueData.IconSelectRange || instrumentValueData.icon
-    property var    _color:                     instrumentValueData.isValidColor(instrumentValueData.currentColor) ? instrumentValueData.currentColor : qgcPal.text
+
+    readonly property bool _darkTelemetryStyle:
+        instrumentValueData
+        && instrumentValueData.factValueGrid
+        && instrumentValueData.factValueGrid.objectName
+            === "pgrDarkTelemetryGrid"
+
+    property var _color:
+        instrumentValueData.isValidColor(
+            instrumentValueData.currentColor
+        )
+            ? instrumentValueData.currentColor
+            : (_darkTelemetryStyle ? "white" : qgcPal.text)
 
     QGCPalette { id: qgcPal; colorGroupEnabled: enabled }
 
@@ -47,9 +50,9 @@ ColumnLayout {
 
         function updateIcon() {
             if (instrumentValueData.rangeType === InstrumentValueData.IconSelectRange) {
-                valueIcon.source = instrumentValueData.currentIcon != "" ? iconPrefix + instrumentValueData.currentIcon : "";
+                valueIcon.source = instrumentValueData.currentIcon !== "" ? iconPrefix + instrumentValueData.currentIcon : "";
             } else if (instrumentValueData.icon) {
-                valueIcon.source = instrumentValueData.icon != "" ? iconPrefix + instrumentValueData.icon : "";
+                valueIcon.source = instrumentValueData.icon !== "" ? iconPrefix + instrumentValueData.icon : "";
             } else {
                 valueIcon.source = ""
             }

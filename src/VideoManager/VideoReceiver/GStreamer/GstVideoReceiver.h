@@ -32,14 +32,14 @@ class GstVideoWorker : public QThread
 {
     Q_OBJECT
 
-public:
+   public:
     explicit GstVideoWorker(QObject *parent = nullptr);
     ~GstVideoWorker();
     bool needDispatch() const;
     void dispatch(Task task);
     void shutdown();
 
-private:
+   private:
     void run() final;
 
     QWaitCondition _taskQueueUpdate;
@@ -56,11 +56,14 @@ class GstVideoReceiver : public VideoReceiver
 {
     Q_OBJECT
 
-public:
+   public:
     explicit GstVideoReceiver(QObject *parent = nullptr);
     ~GstVideoReceiver();
 
-public slots:
+    void startDetachedDecoding(void *sink, QQuickItem *widget) override;
+    void stopDetachedDecoding() override;
+
+   public slots:
     void start(uint32_t timeout) override;
     void stop() override;
     void startDecoding(void *sink) override;
@@ -69,26 +72,31 @@ public slots:
     void stopRecording() override;
     void takeScreenshot(const QString &imageFile) override;
 
-private slots:
+   private slots:
     void _watchdog();
     void _handleEOS();
 
-private:
+   private:
     GstElement *_makeSource(const QString &input);
     GstElement *_makeDecoder(GstCaps *caps = nullptr, GstElement *videoSink = nullptr);
     GstElement *_makeFileSink(const QString &videoFile, FILE_FORMAT format);
 
     void _onNewSourcePad(GstPad *pad);
     void _onNewDecoderPad(GstPad *pad);
+    void _onNewDetachedDecoderPad(GstPad *pad);
     bool _addDecoder(GstElement *src);
     bool _addVideoSink(GstPad *pad);
+    bool _addDetachedDecoder(GstElement *src);
+    bool _addDetachedVideoSink(GstPad *pad);
     void _noteTeeFrame();
     void _noteVideoSinkFrame();
+    void _noteDetachedVideoSinkFrame();
     void _noteEndOfStream();
     /// -Unlink the branch from the src pad
     /// -Send an EOS event at the beginning of that branch
     bool _unlinkBranch(GstElement *from);
     void _shutdownDecodingBranch();
+    void _shutdownDetachedDecodingBranch();
     void _shutdownRecordingBranch();
 
     bool _needDispatch();
@@ -102,11 +110,24 @@ private:
     static gboolean _filterParserCaps(GstElement *bin, GstPad *pad, GstElement *element, GstQuery *query, gpointer data);
     static GstPadProbeReturn _teeProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
     static GstPadProbeReturn _videoSinkProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
+    static GstPadProbeReturn _detachedVideoSinkProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
     static GstPadProbeReturn _eosProbe(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
     static GstPadProbeReturn _keyframeWatch(GstPad *pad, GstPadProbeInfo *info, gpointer user_data);
 
     GstElement *_decoder = nullptr;
     GstElement *_decoderValve = nullptr;
+
+    GstElement *_detachedDecoder = nullptr;
+    GstElement *_detachedDecoderValve = nullptr;
+    GstElement *_detachedVideoSink = nullptr;
+    QQuickItem *_detachedWidget = nullptr;
+    bool _detachedDecoding = false;
+    bool _detachedStopPending = false;
+    bool _removingDetachedDecoder = false;
+    bool _resetDetachedVideoSink = false;
+    qint64 _lastDetachedVideoFrameTime = 0;
+    gulong _detachedVideoSinkProbeId = 0;
+
     GstElement *_fileSink = nullptr;
     GstElement *_pipeline = nullptr;
     GstElement *_recorderValve = nullptr;

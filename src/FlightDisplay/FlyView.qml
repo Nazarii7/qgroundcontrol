@@ -105,6 +105,14 @@ Item {
         FlyViewVideo {
             id:         videoControl
             pipView:    _pipView
+
+            cameraControlsX: widgetLayer.flyCameraPanelX
+            cameraControlsY: widgetLayer.flyToolStripBottom
+
+            // This is the exact inner action-button width used by
+            // Takeoff/Return, not the outer ToolStrip panel width.
+            cameraControlsWidth:
+                widgetLayer.flyToolStripButtonWidth
         }
 
         PipView {

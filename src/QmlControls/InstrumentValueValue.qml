@@ -1,12 +1,3 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -14,7 +5,6 @@ import QtQuick.Controls
 import QGroundControl
 import QGroundControl.Controls
 import QGroundControl.ScreenTools
-import QGroundControl.Palette
 
 ColumnLayout {
     property var    instrumentValueData:            null
@@ -32,18 +22,29 @@ ColumnLayout {
     property real   _width:                         0
     property real   _height:                        0
 
+    readonly property bool _darkTelemetryStyle:
+        instrumentValueData
+        && instrumentValueData.factValueGrid
+        && instrumentValueData.factValueGrid.objectName
+            === "pgrDarkTelemetryGrid"
+
     QGCLabel {
         id:                 label
         Layout.alignment:   Qt.AlignVCenter
         font.pointSize:     _fontSize
-        color:              instrumentValueData.isValidColor(instrumentValueData.currentColor) ? instrumentValueData.currentColor : qgcPal.text
+        color:
+            instrumentValueData.isValidColor(
+                instrumentValueData.currentColor
+            )
+                ? instrumentValueData.currentColor
+                : (_darkTelemetryStyle ? "white" : qgcPal.text)
         text:               valueText()
 
         function valueText() {
             if (instrumentValueData.fact) {
                 return instrumentValueData.fact.enumOrValueString + (instrumentValueData.showUnits ? " " + instrumentValueData.fact.units : "")
             } else {
-                return qsTr("--.--")
+                return qsTr("–")
             }
         }
     }

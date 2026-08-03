@@ -36,12 +36,14 @@ Item {
 
     IntegratedAttitudeIndicator {
         id:                     rollIndicator
+        objectName:             "pgrDarkAttitudeIndicator"
         x:                      -_totalAttitudeSize
         attitudeAngleDegrees:   vehicle ? vehicle.roll.rawValue : 0
         compassRadius:          control.compassRadius
     }
 
     IntegratedAttitudeIndicator {
+        objectName:             "pgrDarkAttitudeIndicator"
         x:                      -_totalAttitudeSize
         attitudeAngleDegrees:   vehicle ? vehicle.pitch.rawValue : 0
         compassRadius:          control.compassRadius
@@ -56,9 +58,14 @@ Item {
         width:  compassRadius * 2
         height: width
         radius: width / 2
-        color:  qgcPal.window
+
+        color: Qt.rgba(0.08, 0.10, 0.13, 0.94)
+
+        border.width: 1
+        border.color: Qt.rgba(1.00, 1.00, 1.00, 0.18)
 
         QGCCompassWidget {
+            objectName:                 "pgrDarkCompass"
             size:                       parent.width - compassBorder
             vehicle:                    control.vehicle
             usedByMultipleVehicleList:  control.usedByMultipleVehicleList
