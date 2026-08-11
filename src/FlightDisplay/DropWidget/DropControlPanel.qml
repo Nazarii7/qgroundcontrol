@@ -35,6 +35,17 @@ Item {
     property int dropModeGroups: 1
     property int dropModeIndividual: 2
 
+    property int controlBehavior: 0
+    property int controlBehaviorStandard: 0
+    property int controlBehaviorStepAndHold: 1
+    property int controlBehaviorSynchronizedPair: 2
+    property bool dropModeEditingEnabled: true
+    property bool canDrop: activeDropCount > 0
+    property bool showPhysicalPositionWhenIdle: false
+    property string configurationMessage: ""
+    property string holdButtonIdleText: "HOLD TO DROP"
+    property string holdButtonActiveText: "RELEASE TO CLOSE"
+
     property string currentDropLabel: ""
     property string nextDropLabel: "Next: All selected"
     property var sequenceOrderedTargets: []
@@ -57,6 +68,7 @@ Item {
     property real dragStartPanelX: 0
     property real dragStartPanelY: 0
 
+    property bool controlBehaviorSectionOpen: false
     property bool dropModeSectionOpen: false
     property bool dropOrderSectionOpen: false
     property bool pwmSectionOpen: false
@@ -76,6 +88,7 @@ Item {
     signal holdPressed()
     signal holdReleased()
 
+    signal controlBehaviorChangedFromUi(int behavior)
     signal dropModeChangedFromUi(int mode)
     signal sequenceOrderMoveRequested(int servoNumber, int direction)
 
@@ -199,7 +212,9 @@ Item {
     function toggleSettingsSection(sectionName) {
         var shouldOpen = false
 
-        if (sectionName === "dropMode") {
+        if (sectionName === "controlBehavior") {
+            shouldOpen = !control.controlBehaviorSectionOpen
+        } else if (sectionName === "dropMode") {
             shouldOpen = !control.dropModeSectionOpen
         } else if (sectionName === "dropOrder") {
             shouldOpen = !control.dropOrderSectionOpen
@@ -209,6 +224,7 @@ Item {
             shouldOpen = !control.availableChannelsSectionOpen
         }
 
+        control.controlBehaviorSectionOpen = false
         control.dropModeSectionOpen = false
         control.dropOrderSectionOpen = false
         control.pwmSectionOpen = false
@@ -218,7 +234,9 @@ Item {
             return
         }
 
-        if (sectionName === "dropMode") {
+        if (sectionName === "controlBehavior") {
+            control.controlBehaviorSectionOpen = true
+        } else if (sectionName === "dropMode") {
             control.dropModeSectionOpen = true
         } else if (sectionName === "dropOrder") {
             control.dropOrderSectionOpen = true
@@ -456,11 +474,114 @@ Item {
                             width: settingsFlick.width
                             spacing: 8
 
+                            Column {
+                                width: parent.width
+                                spacing: 6
+                                visible: control.availableServoCount > 0
+
+                                RowLayout {
+                                    width: parent.width
+                                    height: 28
+                                    spacing: 8
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: "Control behavior"
+                                        color: "white"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Item {
+                                        Layout.preferredWidth: 20
+                                        Layout.preferredHeight: 24
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: control.controlBehaviorSectionOpen ? "−" : "+"
+                                            color: "white"
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+
+                                            onClicked: {
+                                                control.toggleSettingsSection("controlBehavior")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Column {
+                                    width: parent.width
+                                    visible: control.controlBehaviorSectionOpen
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: [
+                                            { label: "Standard", value: control.controlBehaviorStandard },
+                                            { label: "Step & Hold", value: control.controlBehaviorStepAndHold },
+                                            { label: "Synchronized Pair", value: control.controlBehaviorSynchronizedPair }
+                                        ]
+
+                                        delegate: Rectangle {
+                                            width: parent.width
+                                            height: 30
+                                            radius: 8
+                                            color: control.controlBehavior === modelData.value
+                                                   ? Qt.rgba(0.20, 0.55, 0.24, 0.95)
+                                                   : Qt.rgba(1, 1, 1, 0.08)
+                                            border.width: 1
+                                            border.color: control.controlBehavior === modelData.value
+                                                          ? Qt.rgba(0.70, 1.0, 0.72, 0.90)
+                                                          : Qt.rgba(1, 1, 1, 0.16)
+                                            opacity: control.holdActive ? 0.45 : 1.0
+
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: modelData.label
+                                                color: "white"
+                                                font.pixelSize: 10
+                                                font.bold: control.controlBehavior === modelData.value
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: !control.holdActive
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+
+                                                onClicked: {
+                                                    control.controlBehaviorChangedFromUi(modelData.value)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Label {
+                                        width: parent.width
+                                        text: control.configurationMessage
+                                        color: control.canDrop
+                                               ? Qt.rgba(0.65, 1.0, 0.70, 0.86)
+                                               : Qt.rgba(1.0, 0.76, 0.36, 0.92)
+                                        font.pixelSize: 9
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+
                             DropModeSelector {
                                 width: parent.width
                                 visible: control.availableServoCount > 0
                                 currentMode: control.dropMode
                                 sectionOpen: control.dropModeSectionOpen
+                                enabled: control.dropModeEditingEnabled
+                                opacity: enabled ? 1.0 : 0.45
 
                                 onModeSelected: function(mode) {
                                     control.dropModeChangedFromUi(mode)
@@ -473,7 +594,7 @@ Item {
 
                             DropSequenceEditor {
                                 width: parent.width
-                                visible: control.activeDropCount > 1
+                                visible: control.activeDropCount > 1 && control.dropModeEditingEnabled
                                 orderedTargets: control.sequenceOrderedTargets
                                 sectionOpen: control.dropOrderSectionOpen
 
@@ -539,6 +660,17 @@ Item {
                     }
                 }
 
+                Label {
+                    width: parent.width
+                    visible: control.activeDropCount > 0 && control.controlBehavior !== control.controlBehaviorStandard
+                    text: control.configurationMessage
+                    color: control.canDrop
+                           ? Qt.rgba(0.65, 1.0, 0.70, 0.86)
+                           : Qt.rgba(1.0, 0.76, 0.36, 0.92)
+                    font.pixelSize: 9
+                    wrapMode: Text.WordWrap
+                }
+
                 DropCurrentNextLabel {
                     width: parent.width
 
@@ -553,7 +685,9 @@ Item {
 
                     buttonHeight: control.holdButtonHeight
                     holdActive: control.holdActive
-                    canDrop: control.activeDropCount > 0
+                    canDrop: control.canDrop
+                    idleText: control.holdButtonIdleText
+                    activeText: control.holdButtonActiveText
 
                     onHoldPressed: {
                         control.holdPressed()
@@ -574,6 +708,7 @@ Item {
                     activeDropCount: control.activeDropCount
                     rowHeight: control.rowHeight
                     rowAnimatedHeight: control.rowAnimatedHeight
+                    showPhysicalPositionWhenIdle: control.showPhysicalPositionWhenIdle
                 }
             }
         }

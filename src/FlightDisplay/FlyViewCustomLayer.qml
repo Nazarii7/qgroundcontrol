@@ -113,9 +113,24 @@ Item {
         dropModeGroups: dropWidgetController.dropModeGroups
         dropModeIndividual: dropWidgetController.dropModeIndividual
 
+        controlBehavior: dropWidgetController.controlBehavior
+        controlBehaviorStandard: dropWidgetController.controlBehaviorStandard
+        controlBehaviorStepAndHold: dropWidgetController.controlBehaviorStepAndHold
+        controlBehaviorSynchronizedPair: dropWidgetController.controlBehaviorSynchronizedPair
+        dropModeEditingEnabled: dropWidgetController.dropModeEditingEnabled
+        canDrop: dropWidgetController.canDrop
+        showPhysicalPositionWhenIdle: dropWidgetController.showPhysicalPositionWhenIdle
+        configurationMessage: dropWidgetController.configurationMessage
+        holdButtonIdleText: dropWidgetController.holdButtonIdleText
+        holdButtonActiveText: dropWidgetController.holdButtonActiveText
+
         currentDropLabel: dropWidgetController.currentDropLabel
         nextDropLabel: dropWidgetController.nextDropLabel
         sequenceOrderedTargets: dropWidgetController.sequenceOrderedTargets
+
+        onControlBehaviorChangedFromUi: function(behavior) {
+            dropWidgetController.setControlBehavior(behavior)
+        }
 
         onDropModeChangedFromUi: function(mode) {
             dropWidgetController.setDropMode(mode)

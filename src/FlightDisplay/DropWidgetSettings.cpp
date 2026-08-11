@@ -12,6 +12,7 @@ static constexpr const char* kPanelXKey        = "DropWidget/PanelX";
 static constexpr const char* kPanelYKey        = "DropWidget/PanelY";
 static constexpr const char* kPanelExpandedKey = "DropWidget/PanelExpanded";
 static constexpr const char* kDropModeKey      = "DropWidget/DropMode";
+static constexpr const char* kControlBehaviorKey = "DropWidget/ControlBehavior";
 static constexpr const char* kServoOrderKey    = "DropWidget/ServoOrder";
 static constexpr const char* kServoPwmPositionsKey = "DropWidget/ServoPwmPositions";
 static constexpr const char* kCameraControlsVisibleKey = "FlyViewWidgets/CameraControlsVisible";
@@ -212,6 +213,30 @@ void DropWidgetSettings::setDropMode(int value)
     _settings.setValue(kDropModeKey, value);
     _settings.sync();
     emit dropModeChanged();
+}
+
+int DropWidgetSettings::controlBehavior() const
+{
+    // Value 0 is the legacy Standard behavior. Keeping it as the default
+    // guarantees that existing installations continue to work unchanged.
+    return _settings.value(kControlBehaviorKey, 0).toInt();
+}
+
+void DropWidgetSettings::setControlBehavior(int value)
+{
+    // 0 = Standard, 1 = Step & Hold, 2 = Synchronized Pair.
+    // Invalid values are normalized to Standard instead of being persisted.
+    if (value < 0 || value > 2) {
+        value = 0;
+    }
+
+    if (controlBehavior() == value) {
+        return;
+    }
+
+    _settings.setValue(kControlBehaviorKey, value);
+    _settings.sync();
+    emit controlBehaviorChanged();
 }
 
 QString DropWidgetSettings::servoOrder() const

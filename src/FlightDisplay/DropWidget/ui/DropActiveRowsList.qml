@@ -11,6 +11,7 @@ Item {
     property int activeDropCount: 0
     property real rowHeight: 54
     property real rowAnimatedHeight: 58
+    property bool showPhysicalPositionWhenIdle: false
 
     width: parent ? parent.width : 320
     height: activeDropCount > 0 ? rowsColumn.implicitHeight : 0
@@ -84,6 +85,7 @@ Item {
                     rowCurrentPositionLabel: row ? row.currentPositionLabel : "Closed"
                     rowNextOpenPwm: row ? row.nextOpenPwm : 2000
                     rowNextPositionLabel: row ? row.nextPositionLabel : "P1"
+                    showPhysicalPositionWhenIdle: list.showPhysicalPositionWhenIdle
                 }
             }
         }

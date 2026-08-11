@@ -6,6 +6,8 @@ Rectangle {
     property bool holdActive: false
     property bool canDrop: false
     property int buttonHeight: 44
+    property string idleText: "HOLD TO DROP"
+    property string activeText: "RELEASE TO CLOSE"
 
     signal holdPressed()
     signal holdReleased()
@@ -33,7 +35,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
 
-        text: button.holdActive ? "RELEASE TO CLOSE" : "HOLD TO DROP"
+        text: button.holdActive ? button.activeText : button.idleText
         color: "white"
         font.pixelSize: 14
         font.bold: true

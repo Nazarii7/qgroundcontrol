@@ -13,10 +13,14 @@ Item {
     property bool rowIsOpen: false
     property bool rowBusy: false
 
+    readonly property bool rowPhysicallyOpen:
+        rowIsOpen && rowCurrentPositionLabel !== "Closed"
+
     property int rowCurrentPwm: 1000
     property string rowCurrentPositionLabel: "Closed"
     property int rowNextOpenPwm: 2000
     property string rowNextPositionLabel: "P1"
+    property bool showPhysicalPositionWhenIdle: false
 
     property real rowHeight: 54
     property real rowAnimatedHeight: 58
@@ -74,7 +78,7 @@ Item {
                 Layout.preferredWidth: 88
                 Layout.preferredHeight: 32
                 radius: 16
-                color: rowRoot.rowIsOpen
+                color: rowRoot.rowPhysicallyOpen
                        ? Qt.rgba(0.42, 0.08, 0.08, 0.95)
                        : Qt.rgba(0.10, 0.34, 0.14, 0.95)
                 border.width: 1
@@ -90,7 +94,7 @@ Item {
 
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: rowRoot.rowIsOpen ? rowRoot.rowCurrentPositionLabel : "CLOSED"
+                       text: rowRoot.rowPhysicallyOpen ? "OPEN" : "CLOSED"
                         color: "white"
                         font.pixelSize: 9
                         font.bold: true

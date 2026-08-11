@@ -14,6 +14,7 @@ class DropWidgetSettings : public QObject
     Q_PROPERTY(double panelY READ panelY WRITE setPanelY NOTIFY panelYChanged FINAL)
     Q_PROPERTY(bool panelExpanded READ panelExpanded WRITE setPanelExpanded NOTIFY panelExpandedChanged FINAL)
     Q_PROPERTY(int dropMode READ dropMode WRITE setDropMode NOTIFY dropModeChanged FINAL)
+    Q_PROPERTY(int controlBehavior READ controlBehavior WRITE setControlBehavior NOTIFY controlBehaviorChanged FINAL)
     Q_PROPERTY(QString servoOrder READ servoOrder WRITE setServoOrder NOTIFY servoOrderChanged FINAL)
     Q_PROPERTY(QString servoPwmPositions READ servoPwmPositions WRITE setServoPwmPositions NOTIFY servoPwmPositionsChanged FINAL)
     Q_PROPERTY(bool cameraControlsVisible READ cameraControlsVisible WRITE setCameraControlsVisible NOTIFY cameraControlsVisibleChanged FINAL)
@@ -43,6 +44,9 @@ class DropWidgetSettings : public QObject
     int dropMode() const;
     void setDropMode(int value);
 
+    int controlBehavior() const;
+    void setControlBehavior(int value);
+
     QString servoOrder() const;
     void setServoOrder(const QString& value);
 
@@ -67,6 +71,7 @@ class DropWidgetSettings : public QObject
     void panelExpandedChanged();
 
     void dropModeChanged();
+    void controlBehaviorChanged();
     void servoOrderChanged();
     void servoPwmPositionsChanged();
     void cameraControlsVisibleChanged();
