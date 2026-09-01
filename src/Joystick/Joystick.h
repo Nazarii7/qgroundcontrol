@@ -27,7 +27,7 @@ class Vehicle;
 
 class AssignedButtonAction
 {
-public:
+   public:
     AssignedButtonAction(const QString &name);
 
     QString action;
@@ -42,13 +42,13 @@ class AssignableButtonAction : public QObject
     Q_PROPERTY(QString  action      READ action     CONSTANT)
     Q_PROPERTY(bool     canRepeat   READ canRepeat  CONSTANT)
 
-public:
+   public:
     AssignableButtonAction(const QString &action_, bool canRepeat_ = false, QObject *parent = nullptr);
 
     const QString &action() const { return _action; }
     bool canRepeat() const { return _repeat; }
 
-private:
+   private:
     const QString _action;
     const bool _repeat = false;
 };
@@ -89,7 +89,7 @@ class Joystick : public QThread
         BUTTON_REPEAT
     };
 
-public:
+   public:
     Joystick(const QString &name, int axisCount, int buttonCount, int hatCount, QObject *parent = nullptr);
     virtual ~Joystick();
 
@@ -132,7 +132,7 @@ public:
 
     void stop();
 
-    /// Start the polling thread which will in turn emit joystick signals
+            /// Start the polling thread which will in turn emit joystick signals
     void startPolling(Vehicle *vehicle);
     void stopPolling();
 
@@ -142,12 +142,12 @@ public:
     void setFunctionAxis(AxisFunction_t function, int axis);
     int getFunctionAxis(AxisFunction_t function) const;
 
-    // Joystick index used by sdl library
-    // Settable because sdl library remaps indices after certain events
-    // virtual int index(void) = 0;
-    // virtual void setIndex(int index) = 0;
+            // Joystick index used by sdl library
+            // Settable because sdl library remaps indices after certain events
+            // virtual int index(void) = 0;
+            // virtual void setIndex(int index) = 0;
 
-	virtual bool requiresCalibration() const { return true; }
+    virtual bool requiresCalibration() const { return true; }
 
     int throttleMode() const { return _throttleMode; }
     void setThrottleMode(int mode);
@@ -170,23 +170,32 @@ public:
     int getTXMode() const { return _transmitterMode; }
     void setTXMode(int mode);
 
-    /// Set the current calibration mode
+            /// Set the current calibration mode
     void setCalibrationMode(bool calibrating);
 
-    /// Get joystick message rate (in Hz)
+            /// Get joystick message rate (in Hz)
     float axisFrequencyHz() const { return _axisFrequencyHz; }
     /// Set joystick message rate (in Hz)
     void setAxisFrequency(float val);
 
-    /// Get joystick button repeat rate (in Hz)
+            /// Get joystick button repeat rate (in Hz)
     float buttonFrequencyHz() const { return _buttonFrequencyHz; }
     /// Set joystick button repeat rate (in Hz)
     void setButtonFrequency(float val);
 
-signals:
-    // The raw signals are only meant for use by calibration
+   signals:
+    // The raw signals are only meant for use by calibration.
+    // Keep these signals unchanged for the existing calibration UI.
     void rawAxisValueChanged(int index, int value);
     void rawButtonPressedChanged(int index, int pressed);
+
+            // General live controller-input signals.
+            // These are intentionally separate from the calibration-only raw signals so
+            // custom controller features can observe inputs without changing calibration
+            // behavior or depending on a calibration-specific API contract.
+    void axisInputChanged(int index, int value);
+    void buttonInputChanged(int index, bool pressed);
+
     void calibratedChanged(bool calibrated);
     void buttonActionsChanged();
     void assignableActionsChanged();
@@ -224,7 +233,7 @@ signals:
     void motorInterlock(bool enable);
     void unknownAction(const QString &action);
 
-protected:
+   protected:
     void _setDefaultCalibration();
 
     QString _name;
@@ -232,12 +241,12 @@ protected:
     int _buttonCount = 0;
     int _hatCount = 0;
 
-private slots:
+   private slots:
     void _activeVehicleChanged(Vehicle *activeVehicle);
     void _vehicleCountChanged(int count);
     void _flightModesChanged() { _buildActionList(_activeVehicle); }
 
-private:
+   private:
     virtual bool _open() = 0;
     virtual void _close() = 0;
     virtual bool _update() = 0;
@@ -252,7 +261,7 @@ private:
     void _saveButtonSettings();
     void _loadSettings();
 
-    /// Adjust the raw axis value to the -1:1 range given calibration information
+            /// Adjust the raw axis value to the -1:1 range given calibration information
     float _adjustRange(int value, const Calibration_t &calibration, bool withDeadbands);
     void _executeButtonAction(const QString &action, bool buttonDown);
     int  _findAssignableButtonAction(const QString &action);
@@ -264,10 +273,10 @@ private:
 
     void _updateTXModeSettingsKey(Vehicle *activeVehicle);
 
-    /// Relative mappings of axis functions between different TX modes
+            /// Relative mappings of axis functions between different TX modes
     int _mapFunctionMode(int mode, int function);
 
-    /// Remap current axis functions from current TX mode to new TX mode
+            /// Remap current axis functions from current TX mode to new TX mode
     void _remapAxes(int currentMode, int newMode, int (&newMapping)[maxFunction]);
 
     int _hatButtonCount = 0;

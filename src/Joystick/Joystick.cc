@@ -33,15 +33,15 @@ QGC_LOGGING_CATEGORY(JoystickValuesLog, "qgc.joystick.joystickvalues")
 AssignedButtonAction::AssignedButtonAction(const QString &name)
     : action(name)
 {
-    // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
+   // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
 }
 
 AssignableButtonAction::AssignableButtonAction(const QString &action_, bool canRepeat_, QObject *parent)
     : QObject(parent)
-    , _action(action_)
-    , _repeat(canRepeat_)
+      , _action(action_)
+      , _repeat(canRepeat_)
 {
-    // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
+   // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
 }
 
 /*===========================================================================*/
@@ -50,17 +50,17 @@ int Joystick::_transmitterMode = 2;
 
 Joystick::Joystick(const QString &name, int axisCount, int buttonCount, int hatCount, QObject *parent)
     : QThread(parent)
-    , _name(name)
-    , _axisCount(axisCount)
-    , _buttonCount(buttonCount)
-    , _hatCount(hatCount)
-    , _hatButtonCount(4 * hatCount)
-    , _totalButtonCount(_buttonCount + _hatButtonCount)
-    , _rgAxisValues(new int[static_cast<size_t>(_axisCount)])
-    , _rgCalibration(new Calibration_t[static_cast<size_t>(_axisCount)])
-    , _rgButtonValues(new uint8_t[static_cast<size_t>(_totalButtonCount)])
-    , _mavlinkActionManager(new MavlinkActionManager(SettingsManager::instance()->mavlinkActionsSettings()->joystickActionsFile(), this))
-    , _assignableButtonActions(new QmlObjectListModel(this))
+      , _name(name)
+      , _axisCount(axisCount)
+      , _buttonCount(buttonCount)
+      , _hatCount(hatCount)
+      , _hatButtonCount(4 * hatCount)
+      , _totalButtonCount(_buttonCount + _hatButtonCount)
+      , _rgAxisValues(new int[static_cast<size_t>(_axisCount)])
+      , _rgCalibration(new Calibration_t[static_cast<size_t>(_axisCount)])
+      , _rgButtonValues(new uint8_t[static_cast<size_t>(_totalButtonCount)])
+      , _mavlinkActionManager(new MavlinkActionManager(SettingsManager::instance()->mavlinkActionsSettings()->joystickActionsFile(), this))
+      , _assignableButtonActions(new QmlObjectListModel(this))
 {
     // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
 
@@ -94,7 +94,7 @@ Joystick::~Joystick()
     _assignableButtonActions->clearAndDeleteContents();
     qDeleteAll(_buttonActionArray);
 
-    // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
+            // qCDebug(JoystickLog) << Q_FUNC_INFO << this;
 }
 
 void Joystick::stop()
@@ -111,7 +111,7 @@ void Joystick::_setDefaultCalibration()
 
     _calibrated = settings.value(_calibratedSettingsKey, false).toBool();
 
-    // Only set default calibrations if we do not have a calibration for this gamecontroller
+            // Only set default calibrations if we do not have a calibration for this gamecontroller
     if (_calibrated) {
         return;
     }
@@ -124,7 +124,7 @@ void Joystick::_setDefaultCalibration()
     _rgCalibration[1].reversed = true;
     _rgCalibration[3].reversed = true;
 
-    // Default TX Mode 2 axis assignments for gamecontrollers
+            // Default TX Mode 2 axis assignments for gamecontrollers
     _rgFunctionAxis[rollFunction] = 2;
     _rgFunctionAxis[pitchFunction] = 3;
     _rgFunctionAxis[yawFunction] = 0;
@@ -262,8 +262,8 @@ void Joystick::_loadSettings()
 
     badSettings |= (workingAxis < 4);
 
-    // FunctionAxis mappings are always stored in TX mode 2
-    // Remap to stored TX mode in settings
+            // FunctionAxis mappings are always stored in TX mode 2
+            // Remap to stored TX mode in settings
     _remapAxes (2, _transmitterMode, _rgFunctionAxis);
 
     for (int button = 0; button < _totalButtonCount; button++) {
@@ -352,7 +352,7 @@ void Joystick::_saveSettings()
                              << calibration->deadband;
     }
 
-    // Write mode 2 mappings without changing mapping currently in use
+            // Write mode 2 mappings without changing mapping currently in use
     int temp[maxFunction];
     _remapAxes(_transmitterMode, 2, temp);
 
@@ -471,7 +471,7 @@ void Joystick::_handleButtons()
 {
     int lastBbuttonValues[256]{};
 
-    //-- Update button states
+            //-- Update button states
     for (int buttonIndex = 0; buttonIndex < _buttonCount; buttonIndex++) {
         const bool newButtonValue = _getButton(buttonIndex);
         if (buttonIndex < 256) {
@@ -481,13 +481,15 @@ void Joystick::_handleButtons()
         if (newButtonValue && (_rgButtonValues[buttonIndex] == BUTTON_UP)) {
             _rgButtonValues[buttonIndex] = BUTTON_DOWN;
             emit rawButtonPressedChanged(buttonIndex, newButtonValue);
+            emit buttonInputChanged(buttonIndex, newButtonValue);
         } else if (!newButtonValue && (_rgButtonValues[buttonIndex] != BUTTON_UP)) {
             _rgButtonValues[buttonIndex] = BUTTON_UP;
             emit rawButtonPressedChanged(buttonIndex, newButtonValue);
+            emit buttonInputChanged(buttonIndex, newButtonValue);
         }
     }
 
-    //-- Update hat - append hat buttons to the end of the normal button list
+            //-- Update hat - append hat buttons to the end of the normal button list
     int numHatButtons = 4;
     for (int hatIndex = 0; hatIndex < _hatCount; hatIndex++) {
         for (int hatButtonIndex = 0; hatButtonIndex < numHatButtons; hatButtonIndex++) {
@@ -502,14 +504,16 @@ void Joystick::_handleButtons()
             if (newButtonValue && (_rgButtonValues[rgButtonValueIndex] == BUTTON_UP)) {
                 _rgButtonValues[rgButtonValueIndex] = BUTTON_DOWN;
                 emit rawButtonPressedChanged(rgButtonValueIndex, newButtonValue);
+                emit buttonInputChanged(rgButtonValueIndex, newButtonValue);
             } else if (!newButtonValue && (_rgButtonValues[rgButtonValueIndex] != BUTTON_UP)) {
                 _rgButtonValues[rgButtonValueIndex] = BUTTON_UP;
                 emit rawButtonPressedChanged(rgButtonValueIndex, newButtonValue);
+                emit buttonInputChanged(rgButtonValueIndex, newButtonValue);
             }
         }
     }
 
-    //-- Process button press/release
+            //-- Process button press/release
     for (int buttonIndex = 0; buttonIndex < _totalButtonCount; buttonIndex++) {
         if ((_rgButtonValues[buttonIndex] == BUTTON_DOWN) || (_rgButtonValues[buttonIndex] == BUTTON_REPEAT)) {
             if (_buttonActionArray[buttonIndex]) {
@@ -587,10 +591,20 @@ void Joystick::_handleAxis()
     _axisTime.start();
 
     for (int axisIndex = 0; axisIndex < _axisCount; axisIndex++) {
-        int newAxisValue = _getAxis(axisIndex);
-        // Calibration code requires signal to be emitted even if value hasn't changed
+        const int previousAxisValue = _rgAxisValues[axisIndex];
+        const int newAxisValue = _getAxis(axisIndex);
+
+                // Calibration code requires this signal to be emitted even if the value
+                // has not changed. Keep the existing behavior intact.
         _rgAxisValues[axisIndex] = newAxisValue;
         emit rawAxisValueChanged(axisIndex, newAxisValue);
+
+                // General controller-input observers only need actual value changes.
+                // This keeps the new API independent from calibration while avoiding
+                // unnecessary queued events for a stationary controller.
+        if (newAxisValue != previousAxisValue) {
+            emit axisInputChanged(axisIndex, newAxisValue);
+        }
     }
 
     if (!_activeVehicle->joystickEnabled() || _calibrationMode || !_calibrated) {
@@ -634,7 +648,7 @@ void Joystick::_handleAxis()
         const float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
         const float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
 
-        // Map from unit circle to linear range and limit
+                // Map from unit circle to linear range and limit
         roll = std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
         pitch = std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
         yaw = std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
@@ -650,7 +664,7 @@ void Joystick::_handleAxis()
         yaw = -_exponential*powf(yaw,  3) + ((1+_exponential) * yaw);
     }
 
-    // Adjust throttle to 0:1 range
+            // Adjust throttle to 0:1 range
     if ((_throttleMode == ThrottleModeCenterZero) && (_activeVehicle->supportsThrottleModeCenterZero())) {
         if (!_activeVehicle->supportsNegativeThrust() || !_negativeThrust) {
             throttle = std::max(0.0f, throttle);
@@ -661,8 +675,8 @@ void Joystick::_handleAxis()
 
     qCDebug(JoystickValuesLog) << "name:roll:pitch:yaw:throttle:gimbalPitch:gimbalYaw" << name() << roll << -pitch << yaw << throttle << gimbalPitch << gimbalYaw;
 
-    // NOTE: The buttonPressedBits going to MANUAL_CONTROL are currently used by ArduSub (and it only handles 16 bits)
-    // Set up button bitmap
+            // NOTE: The buttonPressedBits going to MANUAL_CONTROL are currently used by ArduSub (and it only handles 16 bits)
+            // Set up button bitmap
     quint64 buttonPressedBits = 0;  ///< Buttons pressed for manualControl signal
     for (int buttonIndex = 0; buttonIndex < _totalButtonCount; buttonIndex++) {
         const quint64 buttonBit = static_cast<quint64>(1LL << buttonIndex);
@@ -700,12 +714,12 @@ void Joystick::startPolling(Vehicle* vehicle)
 
         _activeVehicle = vehicle;
 
-        // If joystick is not calibrated, disable it
+                // If joystick is not calibrated, disable it
         if ((axisCount() != 0) && !_calibrated) {
             vehicle->setJoystickEnabled(false);
         }
 
-        // Update qml in case of joystick transition
+                // Update qml in case of joystick transition
         emit calibratedChanged(_calibrated);
 
         _buildActionList(vehicle);

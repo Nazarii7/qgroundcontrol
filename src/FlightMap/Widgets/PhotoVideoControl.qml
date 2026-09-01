@@ -1381,6 +1381,97 @@ Rectangle {
                         QGCLabel {
                             Layout.fillWidth: true
 
+                            text: qsTr("Controller Input")
+                            color: pgrStyle.textPrimary
+                            font.pixelSize: pgrStyle.buttonFontSize
+                        }
+
+                        Rectangle {
+                            id: controllerInputVisibilitySwitch
+
+                            Layout.preferredWidth:
+                                Math.max(
+                                    42,
+                                    ScreenTools.defaultFontPixelWidth * 5
+                                )
+
+                            Layout.preferredHeight:
+                                Math.max(
+                                    22,
+                                    ScreenTools.defaultFontPixelHeight * 1.25
+                                )
+
+                            radius: height / 2
+
+                            color:
+                                root.widgetSettings
+                                && Boolean(
+                                    root
+                                        .widgetSettings
+                                        .controllerInputVisible
+                                )
+                                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
+                                    : pgrStyle.buttonIdle
+
+                            border.width: 1
+                            border.color: pgrStyle.buttonBorder
+                            opacity: root.widgetSettings ? 1.0 : 0.45
+
+                            Rectangle {
+                                width: parent.height - 6
+                                height: width
+                                radius: width / 2
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                x:
+                                    root.widgetSettings
+                                    && Boolean(
+                                        root
+                                            .widgetSettings
+                                            .controllerInputVisible
+                                    )
+                                        ? parent.width - width - 3
+                                        : 3
+
+                                color: pgrStyle.textPrimary
+
+                                Behavior on x {
+                                    NumberAnimation {
+                                        duration: 110
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: root.widgetSettings !== null
+                                hoverEnabled: true
+                                cursorShape:
+                                    enabled
+                                        ? Qt.PointingHandCursor
+                                        : Qt.ArrowCursor
+
+                                onClicked: {
+                                    root
+                                        .widgetSettings
+                                        .controllerInputVisible =
+                                            !Boolean(
+                                                root
+                                                    .widgetSettings
+                                                    .controllerInputVisible
+                                            )
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: root._margins
+
+                        QGCLabel {
+                            Layout.fillWidth: true
+
                             text: qsTr("Camera Logs")
                             color: pgrStyle.textPrimary
                             font.pixelSize: pgrStyle.buttonFontSize

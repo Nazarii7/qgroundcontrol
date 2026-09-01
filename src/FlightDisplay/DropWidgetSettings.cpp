@@ -17,6 +17,7 @@ static constexpr const char* kServoOrderKey    = "DropWidget/ServoOrder";
 static constexpr const char* kServoPwmPositionsKey = "DropWidget/ServoPwmPositions";
 static constexpr const char* kCameraControlsVisibleKey = "FlyViewWidgets/CameraControlsVisible";
 static constexpr const char* kDropWidgetVisibleKey = "FlyViewWidgets/DropWidgetVisible";
+static constexpr const char* kControllerInputVisibleKey = "FlyViewWidgets/ControllerInputVisible";
 static constexpr const char* kCameraLogsVisibleKey = "FlyViewWidgets/CameraLogsVisible";
 
 static QString servoFunctionParamName(int servoNumber)
@@ -301,6 +302,22 @@ void DropWidgetSettings::setDropWidgetVisible(bool value)
     _settings.setValue(kDropWidgetVisibleKey, value);
     _settings.sync();
     emit dropWidgetVisibleChanged();
+}
+
+bool DropWidgetSettings::controllerInputVisible() const
+{
+    return _settings.value(kControllerInputVisibleKey, true).toBool();
+}
+
+void DropWidgetSettings::setControllerInputVisible(bool value)
+{
+    if (controllerInputVisible() == value) {
+        return;
+    }
+
+    _settings.setValue(kControllerInputVisibleKey, value);
+    _settings.sync();
+    emit controllerInputVisibleChanged();
 }
 
 bool DropWidgetSettings::cameraLogsVisible() const

@@ -16,6 +16,7 @@ import QGroundControl.ScreenTools
 import QGroundControl.FlightDisplay
 
 import "DropWidget" as DropWidget
+import "ControllerInput" as ControllerInput
 
 Item {
     id: _root
@@ -31,6 +32,8 @@ Item {
     readonly property real _rowAnimatedHeight: 58
     readonly property real _settingsRowHeight: 44
     readonly property real _topOffset: parentToolInsets ? parentToolInsets.topEdgeRightInset + _m : _m
+    readonly property real _controllerTopOffset:
+        parentToolInsets ? parentToolInsets.topEdgeRightInset + _m : _m
 
     QGCToolInsets {
         id: _toolInsets
@@ -62,6 +65,17 @@ Item {
         colorGroupEnabled: true
     }
 
+    ControllerInput.ControllerInputPanel {
+        id: controllerInputPanel
+
+        anchors.fill: parent
+
+        visible: DropWidgetSettings.controllerInputVisible
+
+        margin: _m
+        topOffset: _controllerTopOffset
+        panelWidth: 320
+    }
     DropWidget.DropWidgetController {
         id: dropWidgetController
 

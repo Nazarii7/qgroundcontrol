@@ -1,9 +1,12 @@
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
+        ControllerInputManager.cc
+        ControllerInputManager.h
         Joystick.cc
         Joystick.h
         JoystickManager.cc
         JoystickManager.h
+
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

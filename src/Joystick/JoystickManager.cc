@@ -8,12 +8,13 @@
  ****************************************************************************/
 
 #include "JoystickManager.h"
+#include "ControllerInputManager.h"
 #include "Joystick.h"
 #if defined(QGC_SDL_JOYSTICK)
-    #include "JoystickSDL.h"
-    #include <SDL.h>
+#include "JoystickSDL.h"
+#include <SDL.h>
 #elif defined(Q_OS_ANDROID)
-    #include "JoystickAndroid.h"
+#include "JoystickAndroid.h"
 #endif
 #include "QGCLoggingCategory.h"
 
@@ -29,7 +30,7 @@ Q_APPLICATION_STATIC(JoystickManager, _joystickManager);
 
 JoystickManager::JoystickManager(QObject *parent)
     : QObject(parent)
-    , _joystickCheckTimer(new QTimer(this))
+      , _joystickCheckTimer(new QTimer(this))
 {
     // qCDebug(JoystickManagerLog) << Q_FUNC_INFO << this;
 
@@ -47,7 +48,7 @@ JoystickManager::~JoystickManager()
         delete it->second;
     }
 
-    // qCDebug(JoystickManagerLog) << Q_FUNC_INFO << this;
+            // qCDebug(JoystickManagerLog) << Q_FUNC_INFO << this;
 }
 
 JoystickManager *JoystickManager::instance()
@@ -59,6 +60,7 @@ void JoystickManager::registerQmlTypes()
 {
     (void) qmlRegisterUncreatableType<JoystickManager>("QGroundControl.JoystickManager", 1, 0, "JoystickManager", "Reference only");
     (void) qmlRegisterUncreatableType<Joystick>("QGroundControl.JoystickManager", 1, 0, "Joystick", "Reference only");
+    ControllerInputManager::registerQmlSingleton();
 }
 
 void JoystickManager::init()
@@ -81,6 +83,10 @@ void JoystickManager::init()
     (void) connect(_joystickCheckTimer, &QTimer::timeout, this, &JoystickManager::_updateAvailableJoysticks);
     _joystickCheckTimerCounter = 5;
     _joystickCheckTimer->start();
+
+            // Passive observer only: it subscribes to the active joystick and does not
+            // start/stop polling or modify existing joystick/vehicle behavior.
+    ControllerInputManager::instance()->init();
 }
 
 void JoystickManager::_setActiveJoystickFromSettings()
@@ -98,8 +104,8 @@ void JoystickManager::_setActiveJoystickFromSettings()
         setActiveJoystick(nullptr);
     }
 
-    // Check to see if our current mapping contains any joysticks that are not in the new mapping
-    // If so, those joysticks have been unplugged, and need to be cleaned up
+            // Check to see if our current mapping contains any joysticks that are not in the new mapping
+            // If so, those joysticks have been unplugged, and need to be cleaned up
     for (QMap<QString, Joystick*>::key_value_iterator it = _name2JoystickMap.keyValueBegin(); it != _name2JoystickMap.keyValueEnd(); ++it) {
         if (!newMap.contains(it->first)) {
             qCDebug(JoystickManagerLog) << "Releasing joystick:" << it->first;
@@ -198,21 +204,21 @@ void JoystickManager::_updateAvailableJoysticks()
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch(event.type) {
-        case SDL_QUIT:
-            qCDebug(JoystickManagerLog) << "SDL ERROR:" << SDL_GetError();
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-        case SDL_JOYDEVICEADDED:
-            qCDebug(JoystickManagerLog) << "Joystick added:" << event.jdevice.which;
-            _setActiveJoystickFromSettings();
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-        case SDL_JOYDEVICEREMOVED:
-            qCDebug(JoystickManagerLog) << "Joystick removed:" << event.jdevice.which;
-            _setActiveJoystickFromSettings();
-            break;
-        default:
-            break;
+            case SDL_QUIT:
+                qCDebug(JoystickManagerLog) << "SDL ERROR:" << SDL_GetError();
+                break;
+            case SDL_CONTROLLERDEVICEADDED:
+            case SDL_JOYDEVICEADDED:
+                qCDebug(JoystickManagerLog) << "Joystick added:" << event.jdevice.which;
+                _setActiveJoystickFromSettings();
+                break;
+            case SDL_CONTROLLERDEVICEREMOVED:
+            case SDL_JOYDEVICEREMOVED:
+                qCDebug(JoystickManagerLog) << "Joystick removed:" << event.jdevice.which;
+                _setActiveJoystickFromSettings();
+                break;
+            default:
+                break;
         }
     }
 #elif defined(Q_OS_ANDROID)

@@ -7,6 +7,7 @@ qt_add_qml_module(FlightDisplayModule
     QML_FILES
         CustomGuidedActionsController.qml
         DefaultChecklist.qml
+        ControllerInput/ControllerInputPanel.qml
         DropWidget/DropWidgetController.qml
         DropWidget/DropControlPanel.qml
         DropWidget/ui/DropControlRow.qml

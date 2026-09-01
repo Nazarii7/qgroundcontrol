@@ -16,21 +16,38 @@ class SiYi : public QObject
     Q_PROPERTY(bool isAndroid READ isAndroid CONSTANT)
     Q_PROPERTY(bool hideWidgets READ hideWidgets WRITE setHideWidgets NOTIFY hideWidgetsChanged FINAL)
     Q_PROPERTY(int iconsHeight READ iconsHeight WRITE setIconsHeight NOTIFY iconsHeightChanged FINAL)
-public:
+
+   public:
     explicit SiYi(QObject *parent = nullptr);
     static SiYi *instance();
     static void registerQmlSingleton();
     SiYiCamera *cameraInstance();
     SiYiTransmitter *transmitterInstance();
-private:
+
+   private:
     static SiYi *instance_;
     SiYiCamera *camera_;
     SiYiTransmitter *transmitter_;
     bool isTransmitterConnected_{false};
-private:
+
+            // GX12 camera-control state. The joystick layer only publishes normalized
+            // semantic inputs; SIYI-specific deadzones/hysteresis and commands stay here.
+    int controllerTiltPitch_{0};
+    int controllerZoomDirection_{0};
+
+    static constexpr int kControllerTiltDeadzonePercent = 5;
+    static constexpr int kControllerZoomStartPercent = 20;
+    static constexpr int kControllerZoomStopPercent = 10;
+
+    void handleControllerTiltInput(int percent);
+    void handleControllerZoomInput(int percent);
+    void resetControllerCameraState();
+
+   private:
     QVariant camera(){return QVariant::fromValue(camera_);}
     QVariant transmitter(){return QVariant::fromValue(transmitter_);}
-private:
+
+   private:
     bool isAndroid_;
     bool isAndroid(){return isAndroid_;}
 

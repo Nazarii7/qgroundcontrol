@@ -19,6 +19,7 @@ class DropWidgetSettings : public QObject
     Q_PROPERTY(QString servoPwmPositions READ servoPwmPositions WRITE setServoPwmPositions NOTIFY servoPwmPositionsChanged FINAL)
     Q_PROPERTY(bool cameraControlsVisible READ cameraControlsVisible WRITE setCameraControlsVisible NOTIFY cameraControlsVisibleChanged FINAL)
     Q_PROPERTY(bool dropWidgetVisible READ dropWidgetVisible WRITE setDropWidgetVisible NOTIFY dropWidgetVisibleChanged FINAL)
+    Q_PROPERTY(bool controllerInputVisible READ controllerInputVisible WRITE setControllerInputVisible NOTIFY controllerInputVisibleChanged FINAL)
     Q_PROPERTY(bool cameraLogsVisible READ cameraLogsVisible WRITE setCameraLogsVisible NOTIFY cameraLogsVisibleChanged FINAL)
 
    public:
@@ -59,6 +60,9 @@ class DropWidgetSettings : public QObject
     bool dropWidgetVisible() const;
     void setDropWidgetVisible(bool value);
 
+    bool controllerInputVisible() const;
+    void setControllerInputVisible(bool value);
+
     bool cameraLogsVisible() const;
     void setCameraLogsVisible(bool value);
 
@@ -76,6 +80,7 @@ class DropWidgetSettings : public QObject
     void servoPwmPositionsChanged();
     void cameraControlsVisibleChanged();
     void dropWidgetVisibleChanged();
+    void controllerInputVisibleChanged();
     void cameraLogsVisibleChanged();
 
    private:
