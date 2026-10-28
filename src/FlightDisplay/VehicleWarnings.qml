@@ -19,7 +19,11 @@ Rectangle {
     width:              warningsCol.width
     color:              Qt.rgba(1, 1, 1, 0.5)
     radius:             ScreenTools.defaultFontPixelWidth / 2
-    visible:            _noGPSLockVisible || _prearmErrorVisible
+    // Keep the center of the video clear. PreArm reasons already enter
+    // Vehicle.statusTextMessages and the persistent lower StatusMessageOSD.
+    // GPS state remains available in the GPS indicators. This changes only
+    // the legacy visual overlay; vehicle checks and message history stay intact.
+    visible:            false
 
     property var  _activeVehicle:       QGroundControl.multiVehicleManager.activeVehicle
     property bool _noGPSLockVisible:    _activeVehicle && _activeVehicle.requiresGpsFix && !_activeVehicle.coordinate.isValid

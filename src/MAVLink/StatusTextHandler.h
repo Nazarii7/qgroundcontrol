@@ -12,6 +12,7 @@
 #include <QtCore/QList>
 #include <QtCore/QObject>
 #include <QtCore/QLoggingCategory>
+#include <QtCore/QVariantList>
 
 #include "MAVLinkLib.h"
 
@@ -22,22 +23,26 @@ class QTimer;
 
 class StatusText
 {
-public:
-    StatusText(MAV_COMPONENT componentid, MAV_SEVERITY severity, const QString &text);
+   public:
+    StatusText(MAV_COMPONENT componentid, MAV_SEVERITY severity, const QString &text, const QString &timestamp, quint64 id);
 
     bool severityIsError() const;
 
     MAV_COMPONENT getComponentID() const { return m_compId; }
     MAV_SEVERITY getSeverity() const { return m_severity; }
     QString getText() const { return m_text; }
+    QString getTimestamp() const { return m_timestamp; }
+    quint64 getId() const { return m_id; }
     QString getFormattedText() const { return m_formatedText; }
 
     void setFormatedText(const QString &formatedText) { m_formatedText = formatedText; }
 
-private:
+   private:
     MAV_COMPONENT m_compId;
     MAV_SEVERITY m_severity;
     QString m_text;
+    QString m_timestamp;
+    quint64 m_id;
     QString m_formatedText;
 };
 
@@ -52,7 +57,7 @@ class StatusTextHandler : public QObject
         MessageError
     };
 
-public:
+   public:
     explicit StatusTextHandler(QObject *parent = nullptr);
     ~StatusTextHandler();
 
@@ -65,6 +70,7 @@ public:
 
     const QList<StatusText*>& messages() const { return m_messages; }
     QString formattedMessages() const;
+    QVariantList statusTextMessages() const;
 
     bool messageTypeNone() const { return (m_messageType == MessageType::MessageNone); }
     bool messageTypeNormal() const { return (m_messageType == MessageType::MessageNormal); }
@@ -79,17 +85,18 @@ public:
 
     static QString getMessageText(const mavlink_message_t &message);
 
-signals:
+   signals:
     void newFormattedMessage(QString message);
     void textMessageReceived(MAV_COMPONENT componentid, MAV_SEVERITY severity, QString text, QString description);
     void messageCountChanged(uint32_t newCount);
     void messageTypeChanged();
+    void messagesChanged();
     void newErrorMessage(QString message);
 
-private slots:
+   private slots:
     void _chunkedStatusTextTimeout();
 
-private:
+   private:
     void _handleStatusText(const mavlink_message_t &message);
     void _handleTextMessage(uint32_t newCount, MessageType messageType = MessageType::MessageNone);
     void _chunkedStatusTextCompleted(MAV_COMPONENT compId);
@@ -103,6 +110,7 @@ private:
     uint32_t m_warningCount = 0;
     uint32_t m_normalCount = 0;
     uint32_t m_messageCount = 0;
+    quint64 m_nextMessageId = 1;
 
     QVector<StatusText*> m_messages;
 

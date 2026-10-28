@@ -32,6 +32,13 @@
     "units":            "v"
 },
 {
+    "name":             "cellVoltage",
+    "shortDesc":        "Cell Voltage",
+    "type":             "double",
+    "decimalPlaces":    2,
+    "units":            "v"
+},
+{
     "name":             "percentRemaining",
     "shortDesc":        "Percent",
     "type":             "double",

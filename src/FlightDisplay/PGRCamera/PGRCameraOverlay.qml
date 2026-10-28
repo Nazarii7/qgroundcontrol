@@ -2,6 +2,7 @@
 import QtQuick.Layouts
 
 import QGroundControl
+import QGroundControl.Controls
 import QGroundControl.FlightDisplay
 import QGroundControl.ScreenTools
 import SiYi.Object 1.0
@@ -12,7 +13,8 @@ import "style" as PGRStyle
 Item {
     id: root
     anchors.fill: parent
-    z: 1000
+    // Camera controls are interactive and must stay above every OSD item.
+    z: 10000
 
     // No full-screen MouseArea here.
     // Only small buttons are interactive, so the main video/gimbal/tracking area remains safe.
@@ -35,13 +37,6 @@ Item {
     property var camera: siyi.camera
 
     readonly property bool hasCamera: camera !== null && camera !== undefined
-
-    // Mirror the original SIYI QGC approach: bind a local QML property
-    // directly to SiYiCamera::zoomMultiple.
-    readonly property int zoomMultipleValue:
-        root.hasCamera
-            ? Number(root.camera.zoomMultiple)
-            : 0
 
     readonly property string tcpDebugState:
         root.hasCamera && root.camera.tcpState
@@ -100,42 +95,186 @@ Item {
     // the outer panel to the exact ToolStrip width.
     readonly property real placementReferencePadding: 4
 
-    // Supplied from the actual Fly View ToolStrip geometry.
-    // cameraPanelWidth is the inner Takeoff/Return action-button width.
+    // Supplied by FlyViewVideo. cameraPanelY is already the intended top
+    // coordinate below Takeoff/Return; cameraPanelWidth is the reference
+    // width used to keep both controls horizontally aligned.
     property real cameraPanelX: panelMargin
     property real cameraPanelY: panelMargin
     property real cameraPanelWidth: headerButtonWidth
 
-    function shouldShowControl(capability) {
-        return root.expanded && (root.showUnavailableControls || capability)
+    readonly property real cameraPanelBottomGap:
+        Math.max(6, ScreenTools.defaultFontPixelHeight * 0.35)
+
+    readonly property bool panelLocked:
+        DropWidgetSettings.cameraControlsLocked
+
+    property real controlPanelX: -1
+    property real controlPanelY: -1
+    property bool controlPanelPositionReady: false
+    property bool controlPanelDragging: false
+    property real dragStartPointerX: 0
+    property real dragStartPointerY: 0
+    property real dragStartPanelX: 0
+    property real dragStartPanelY: 0
+
+    function defaultControlPanelX() {
+        return Math.max(
+            0,
+            root.cameraPanelX
+                + (
+                    root.cameraPanelWidth
+                    + root.placementReferencePadding * 2
+                    - panel.width
+                ) / 2
+        )
     }
 
-    function showZoomMultiple(rawZoomMultiple, reason) {
-        if (!root.controlsVisible) {
-            return
-        }
-
-        var value = Number(rawZoomMultiple)
-
-        if (isNaN(value) || value <= 0) {
-            console.log(
-                "PGR camera: invalid zoom multiple:",
-                rawZoomMultiple,
-                "reason:", reason
-            )
-            return
-        }
-
-        zoomMultipleText.text = (value / 10).toFixed(1)
-        zoomMultiplePopup.visible = true
-        zoomMultiplePopupTimer.restart()
-
-        console.log(
-            "PGR camera: zoom multiple:",
-            zoomMultipleText.text,
-            "raw:", value,
-            "reason:", reason
+    function defaultControlPanelY() {
+        return Math.max(
+            0,
+            root.cameraPanelY
+                + root.cameraPanelBottomGap
         )
+    }
+
+    function savedPositionOverlapsToolStrip(savedX, savedY) {
+        if (savedX < 0 || savedY < 0) {
+            return false
+        }
+
+        var toolStripLeft = root.cameraPanelX
+        var toolStripRight =
+            root.cameraPanelX
+            + root.cameraPanelWidth
+            + root.placementReferencePadding * 2
+        var horizontallyOverlaps =
+            savedX < toolStripRight
+            && savedX + panel.width > toolStripLeft
+
+        return horizontallyOverlaps
+                && savedY < root.defaultControlPanelY()
+    }
+
+    function boundedControlPanelPosition(x, y) {
+        return Qt.point(
+            Math.max(0, Math.min(root.width - panel.width, x)),
+            Math.max(0, Math.min(root.height - panel.height, y))
+        )
+    }
+
+    function initializeControlPanelPosition() {
+        if (root.width <= 0 || root.height <= 0) {
+            return
+        }
+
+        var savedX = Number(DropWidgetSettings.cameraControlsX)
+        var savedY = Number(DropWidgetSettings.cameraControlsY)
+        // Migrate only the old invalid position which covered Return. Any
+        // valid user-moved position remains untouched.
+        var useDefaultPosition =
+            savedX < 0
+            || savedY < 0
+            || savedPositionOverlapsToolStrip(savedX, savedY)
+        var position = boundedControlPanelPosition(
+            useDefaultPosition ? defaultControlPanelX() : savedX,
+            useDefaultPosition ? defaultControlPanelY() : savedY
+        )
+
+        controlPanelX = position.x
+        controlPanelY = position.y
+        controlPanelPositionReady = true
+
+        // Persist the corrected coordinates once. This prevents the obsolete
+        // overlapping position from being restored on the next application
+        // start while leaving every valid user-moved position untouched.
+        if (useDefaultPosition && savedX >= 0 && savedY >= 0) {
+            DropWidgetSettings.setCameraControlsPosition(
+                controlPanelX,
+                controlPanelY
+            )
+        }
+    }
+
+    function reconcileControlPanelPosition() {
+        if (!root.controlPanelPositionReady) {
+            Qt.callLater(root.initializeControlPanelPosition)
+            return
+        }
+
+        if (!root.savedPositionOverlapsToolStrip(
+                    root.controlPanelX,
+                    root.controlPanelY)) {
+            return
+        }
+
+        root.controlPanelX = root.defaultControlPanelX()
+        root.controlPanelY = root.defaultControlPanelY()
+        root.keepControlPanelInBounds(true)
+    }
+
+    function applyControlPanelPosition(pointerPoint) {
+        var position = boundedControlPanelPosition(
+            dragStartPanelX + pointerPoint.x - dragStartPointerX,
+            dragStartPanelY + pointerPoint.y - dragStartPointerY
+        )
+
+        controlPanelX = position.x
+        controlPanelY = position.y
+    }
+
+    function keepControlPanelInBounds(savePosition) {
+        if (!controlPanelPositionReady
+                || root.width <= 0
+                || root.height <= 0) {
+            return
+        }
+
+        var position = boundedControlPanelPosition(
+            controlPanelX,
+            controlPanelY
+        )
+
+        controlPanelX = position.x
+        controlPanelY = position.y
+
+        if (savePosition) {
+            DropWidgetSettings.setCameraControlsPosition(
+                controlPanelX,
+                controlPanelY
+            )
+        }
+    }
+
+    onWidthChanged: {
+        if (controlPanelPositionReady) {
+            keepControlPanelInBounds(false)
+        } else {
+            Qt.callLater(root.initializeControlPanelPosition)
+        }
+    }
+
+    onHeightChanged: {
+        if (controlPanelPositionReady) {
+            keepControlPanelInBounds(false)
+        } else {
+            Qt.callLater(root.initializeControlPanelPosition)
+        }
+    }
+
+    onCameraPanelXChanged: {
+        Qt.callLater(root.reconcileControlPanelPosition)
+    }
+
+    onCameraPanelYChanged: {
+        Qt.callLater(root.reconcileControlPanelPosition)
+    }
+
+    onCameraPanelWidthChanged: {
+        Qt.callLater(root.reconcileControlPanelPosition)
+    }
+
+    function shouldShowControl(capability) {
+        return root.expanded && (root.showUnavailableControls || capability)
     }
 
     function stopZoom() {
@@ -170,8 +309,6 @@ Item {
         if (!root.controlsVisible) {
             root.stopZoom()
             root.stopFocus()
-            zoomMultiplePopupTimer.stop()
-            zoomMultiplePopup.visible = false
         }
     }
 
@@ -322,15 +459,6 @@ Item {
         analyzeIpStartupTimer.restart()
     }
 
-    // This follows the original SIYI pattern: a local bound QML property
-    // reacts when SiYiCamera::zoomMultiple changes.
-    onZoomMultipleValueChanged: {
-        root.showZoomMultiple(
-            root.zoomMultipleValue,
-            "QML property binding"
-        )
-    }
-
     Component.onCompleted: {
         console.log("PGR SiYi object:", siyi)
         console.log("PGR SiYi camera:", camera)
@@ -340,86 +468,27 @@ Item {
         console.log("PGR SiYi parsed IP:", root.parsedCameraIp)
 
         analyzeIpStartupTimer.start()
+        Qt.callLater(root.initializeControlPanelPosition)
     }
 
     PGRStyle.PGRCameraStyle {
         id: style
     }
 
-    // SIYI zoom-multiple notification.
-    // The camera reports zoomMultiple in tenths: 10 -> 1.0, 11 -> 1.1, etc.
-    Rectangle {
-        id: zoomMultiplePopup
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 6
-
-        z: 100
-        visible: false
-
-        width: Math.max(52, zoomMultipleText.implicitWidth + 20)
-        height: zoomMultipleText.implicitHeight + 12
-        radius: style.buttonRadius
-
-        color: style.panelBackground
-        border.width: 1
-        border.color: style.panelBorder
-
-        Text {
-            id: zoomMultipleText
-
-            anchors.centerIn: parent
-
-            text: "1.0"
-            color: style.textPrimary
-            font.pixelSize: 24
-            font.bold: true
-        }
-
-        Timer {
-            id: zoomMultiplePopupTimer
-
-            interval: 5000
-            repeat: false
-            running: false
-
-            onTriggered: {
-                zoomMultiplePopup.visible = false
-            }
-        }
-
-        Connections {
-            target: root.hasCamera ? root.camera : null
-            ignoreUnknownSignals: true
-
-            function onIsConnectedChanged() {
-                if (!root.camera.isConnected) {
-                    zoomMultiplePopupTimer.stop()
-                    zoomMultiplePopup.visible = false
-                }
-            }
-        }
-    }
-
     Rectangle {
         id: panel
 
-        visible: root.controlsVisible
+        // Keep the complete movable panel, including its drag/lock controls,
+        // above the remaining children of this overlay.
+        z: 100
+
+        visible:
+            root.controlsVisible
+            && root.controlPanelPositionReady
         enabled: root.controlsVisible
 
-        x:
-            Math.max(
-                0,
-                root.cameraPanelX
-                    + (
-                        root.cameraPanelWidth
-                        + root.placementReferencePadding * 2
-                        - width
-                    ) / 2
-            )
-
-        y: Math.max(0, root.cameraPanelY)
+        x: root.controlPanelX
+        y: root.controlPanelY
 
         width: ScreenTools.defaultFontPixelWidth * 8
         height: controlsColumn.implicitHeight + 16
@@ -427,6 +496,8 @@ Item {
         color: style.panelBackground
         border.width: 1
         border.color: style.panelBorder
+
+        onHeightChanged: root.keepControlPanelInBounds(false)
 
         ColumnLayout {
             id: controlsColumn
@@ -448,6 +519,147 @@ Item {
             anchors.topMargin: 6
             anchors.bottomMargin: 6
             spacing: 6
+
+            // A single centered lock is also the drag handle. A short click
+            // toggles the lock; dragging is available only while unlocked.
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 22
+
+                Rectangle {
+                    id: cameraLockButton
+
+                    anchors.centerIn: parent
+
+                    width: 22
+                    height: 22
+                    radius: 6
+                    scale:
+                        cameraLockMouseArea.pressed
+                        && !cameraLockMouseArea.dragMoved
+                            ? 0.92
+                            : 1.0
+
+                    color:
+                        cameraLockMouseArea.pressed
+                            ? style.buttonPressed
+                            : cameraLockMouseArea.containsMouse
+                              ? style.buttonActive
+                              : root.panelLocked
+                                ? Qt.rgba(1, 1, 1, 0.08)
+                                : style.buttonActive
+                    border.width: 1
+                    border.color:
+                        root.panelLocked
+                            ? Qt.rgba(1, 1, 1, 0.18)
+                            : style.buttonBorder
+
+                    Behavior on color {
+                        ColorAnimation { duration: 120 }
+                    }
+
+                    Behavior on scale {
+                        NumberAnimation { duration: 90 }
+                    }
+
+                    QGCColoredImage {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: width
+                        sourceSize.width: width
+                        source:
+                            root.panelLocked
+                                ? "qrc:/InstrumentValueIcons/lock-closed.svg"
+                                : "qrc:/InstrumentValueIcons/lock-open.svg"
+                        color: style.textPrimary
+                        mipmap: true
+                    }
+
+                    MouseArea {
+                        id: cameraLockMouseArea
+
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton
+                        hoverEnabled: true
+                        preventStealing: true
+                        cursorShape:
+                            root.panelLocked
+                                ? Qt.PointingHandCursor
+                                : Qt.SizeAllCursor
+
+                        property bool dragMoved: false
+                        readonly property real dragThreshold: 4
+
+                        function pointerInRoot(mouse) {
+                            return mapToItem(root, mouse.x, mouse.y)
+                        }
+
+                        onPressed: function(mouse) {
+                            dragMoved = false
+                            root.controlPanelDragging = false
+
+                            if (!root.panelLocked) {
+                                var pointerPoint = pointerInRoot(mouse)
+                                root.controlPanelDragging = true
+                                root.dragStartPointerX = pointerPoint.x
+                                root.dragStartPointerY = pointerPoint.y
+                                root.dragStartPanelX = root.controlPanelX
+                                root.dragStartPanelY = root.controlPanelY
+                            }
+
+                            mouse.accepted = true
+                        }
+
+                        onPositionChanged: function(mouse) {
+                            if (!pressed
+                                    || root.panelLocked
+                                    || !root.controlPanelDragging) {
+                                return
+                            }
+
+                            var pointerPoint = pointerInRoot(mouse)
+                            var deltaX =
+                                pointerPoint.x - root.dragStartPointerX
+                            var deltaY =
+                                pointerPoint.y - root.dragStartPointerY
+
+                            if (!dragMoved
+                                    && Math.abs(deltaX) < dragThreshold
+                                    && Math.abs(deltaY) < dragThreshold) {
+                                return
+                            }
+
+                            dragMoved = true
+                            root.applyControlPanelPosition(pointerPoint)
+                            mouse.accepted = true
+                        }
+
+                        onReleased: function(mouse) {
+                            if (root.controlPanelDragging && dragMoved) {
+                                root.applyControlPanelPosition(
+                                    pointerInRoot(mouse)
+                                )
+                                root.keepControlPanelInBounds(true)
+                            } else {
+                                DropWidgetSettings.cameraControlsLocked =
+                                    !root.panelLocked
+                            }
+
+                            root.controlPanelDragging = false
+                            mouse.accepted = true
+                        }
+
+                        onCanceled: {
+                            if (root.controlPanelDragging && dragMoved) {
+                                root.keepControlPanelInBounds(true)
+                            }
+
+                            root.controlPanelDragging = false
+                            dragMoved = false
+                        }
+                    }
+                }
+            }
 
             PGRControls.PGRCameraButton {
                 Layout.fillWidth: true

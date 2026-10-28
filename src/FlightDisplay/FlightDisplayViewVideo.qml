@@ -34,7 +34,8 @@ Item {
     // controls and no-video status text are hidden.
     property bool compactPipMode: false
 
-    // FlyViewVideo controls whether direct SIYI mouse movement is allowed.
+    // Legacy caller-facing switch. Camera interaction itself is deliberately
+    // independent from visibility of the optional Camera Controls panel.
     property bool directSiyiMouseControlEnabled: false
 
     // Exposed state used to disable the standard QGC full-video gesture layer.
@@ -163,7 +164,26 @@ Item {
     readonly property color _pgrPipButtonColor: Qt.rgba(0.03, 0.08, 0.12, 0.88)
     readonly property color _pgrPipButtonBorderColor: Qt.rgba(1.0, 1.0, 1.0, 0.70)
 
-    readonly property real _pgrPanelTopMargin: ((mainWindow && mainWindow.header) ? mainWindow.header.height : 0) + (ScreenTools.defaultFontPixelHeight * 0.5)
+    // Keep the internal MAIN/SUB PiP below the top-left Link/GPS OSD row.
+    // These values mirror the adaptive height and spacing used by that row,
+    // so the PiP remains correctly positioned across font/display scales.
+    readonly property real _pgrTopLeftOsdHeight:
+        Math.max(58, ScreenTools.defaultFontPixelHeight * 3.35)
+
+    readonly property real _pgrTopLeftOsdGap:
+        ScreenTools.defaultFontPixelHeight * 0.6
+
+    // Match the absolute left edge of LinkOSD in FlyViewCustomLayer:
+    // FlyView outer margin + the standard 7-font-width tool strip + _m.
+    readonly property real _pgrPanelLeftMargin:
+        (ScreenTools.defaultFontPixelWidth * 8.75)
+        + (ScreenTools.defaultFontPixelHeight * 0.6)
+
+    readonly property real _pgrPanelTopMargin:
+        ((mainWindow && mainWindow.header) ? mainWindow.header.height : 0)
+        + (ScreenTools.defaultFontPixelHeight * 0.5)
+        + _pgrTopLeftOsdHeight
+        + _pgrTopLeftOsdGap
 
     function getWidth() {
         return videoBackground.getWidth()
@@ -356,24 +376,52 @@ Item {
         fillMode:       Image.PreserveAspectCrop
         visible:        !root._pgrMainCanvasVideoActive
 
+        // Keep waiting readable in the upper center, below the actual compass
+        // and flight-mode group. Clean video uses a simple top-edge inset.
+        // The existing stream/compact-PiP visibility logic is unchanged.
         Rectangle {
             id:                 noVideoPanel
+            objectName:         "noVideoPanel"
+            readonly property real edgeMargin:
+                Math.max(12, ScreenTools.defaultFontPixelHeight * 0.75)
+            readonly property real preferredTop: {
+                var layout = mainWindow ? mainWindow.videoStatusLayout : null
+                if (layout && layout.visible && layout.parent) {
+                    var location = layout.parent.mapToItem(noVideo, layout.x, layout.y)
+                    return location.y + layout.height + edgeMargin
+                }
+                return edgeMargin
+            }
+
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom:     parent.bottom
-            anchors.bottomMargin: ScreenTools.defaultFontPixelHeight * 6
-            width:              noVideoLabel.contentWidth + ScreenTools.defaultFontPixelHeight
-            height:             noVideoLabel.contentHeight + ScreenTools.defaultFontPixelHeight
-            radius:             ScreenTools.defaultFontPixelWidth / 2
-            color:              Qt.rgba(0, 0, 0, 0.5)
+            anchors.top:        parent.top
+            anchors.topMargin:  Math.min(Math.max(edgeMargin, preferredTop),
+                                         Math.max(edgeMargin, parent.height - height - edgeMargin))
+            width:              Math.min(Math.max(280, ScreenTools.defaultFontPixelWidth * 28,
+                                                  noVideoLabel.implicitWidth + ScreenTools.defaultFontPixelHeight * 2),
+                                         Math.max(0, parent.width - edgeMargin * 2))
+            height:             Math.max(ScreenTools.defaultFontPixelHeight * 2.2,
+                                         noVideoLabel.implicitHeight + ScreenTools.defaultFontPixelHeight)
+            radius:             8
+            color:              Qt.rgba(0.08, 0.10, 0.13, 0.90)
+            border.width:       1
+            border.color:       Qt.rgba(1, 1, 1, 0.16)
+            clip:               true
             visible:            !root.compactPipMode
 
             QGCLabel {
                 id:                 noVideoLabel
+                anchors.left:       parent.left
+                anchors.right:      parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: ScreenTools.defaultFontPixelHeight
+                anchors.rightMargin: ScreenTools.defaultFontPixelHeight
                 text:               QGroundControl.settingsManager.videoSettings.streamEnabled.rawValue ? qsTr("WAITING FOR VIDEO") : qsTr("VIDEO DISABLED")
                 font.bold:          true
                 color:              "white"
-                font.pointSize:     useSmallFont ? ScreenTools.smallFontPointSize : ScreenTools.largeFontPointSize
-                anchors.centerIn:   parent
+                font.pixelSize:     Math.max(18, ScreenTools.defaultFontPixelHeight * 1.05)
+                wrapMode:           Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
             }
         }
     }
@@ -418,7 +466,15 @@ Item {
             z: 60
 
             controlEnabled:
-                root.directSiyiMouseControlEnabled
+                // The full video remains mouse-controllable even when the
+                // Camera Controls widget is hidden. Preserve the caller's
+                // normal enable switch while the widget is shown. The compact
+                // PiP stays passive so it keeps its normal click behaviour.
+                !root.compactPipMode
+                && (
+                    root.directSiyiMouseControlEnabled
+                    || !DropWidgetSettings.cameraControlsVisible
+                )
 
             onRequestToggleFullScreen: {
                 root.requestToggleFullScreen()
@@ -511,7 +567,7 @@ Item {
                         width:              root._pgrMainPipWidth
                         height:             root._pgrMainPipHeight
                         anchors.topMargin:  root._pgrPanelTopMargin
-                        anchors.leftMargin: ScreenTools.defaultFontPixelWidth * 12
+                        anchors.leftMargin: root._pgrPanelLeftMargin
                         z:                  80
                     }
                 }
@@ -697,7 +753,7 @@ Item {
             anchors.top:        parent.top
             anchors.topMargin:  root._pgrPanelTopMargin
             anchors.left:       parent.left
-            anchors.leftMargin: ScreenTools.defaultFontPixelWidth * 12
+            anchors.leftMargin: root._pgrPanelLeftMargin
 
             width:  ScreenTools.defaultFontPixelHeight * 2
             height: ScreenTools.defaultFontPixelHeight * 2
@@ -747,7 +803,7 @@ Item {
             anchors.top:        parent.top
             anchors.topMargin:  root._pgrPanelTopMargin
             anchors.left:       parent.left
-            anchors.leftMargin: ScreenTools.defaultFontPixelWidth * 12
+            anchors.leftMargin: root._pgrPanelLeftMargin
             visible:            !root._pgrSubDetached
                                 && (root._pgrSubVisible
                                     || (!pgrSubstreamMode && QGroundControl.videoManager.hasThermal
@@ -1060,7 +1116,7 @@ Item {
             anchors.top:        parent.top
             anchors.topMargin:  root._pgrPanelTopMargin
             anchors.left:       parent.left
-            anchors.leftMargin: ScreenTools.defaultFontPixelWidth * 12
+            anchors.leftMargin: root._pgrPanelLeftMargin
 
             radius: ScreenTools.defaultFontPixelHeight / 3
             color:  Qt.rgba(0, 0, 0, 0.75)

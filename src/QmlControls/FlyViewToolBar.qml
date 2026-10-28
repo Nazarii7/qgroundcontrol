@@ -117,7 +117,7 @@ Rectangle {
         anchors.bottomMargin:   1
         anchors.top:            parent.top
         anchors.bottom:         parent.bottom
-        anchors.right:          parent.right
+        anchors.right:          payloadSettingsButton.left
         contentWidth:           toolIndicators.width
         flickableDirection:     Flickable.HorizontalFlick
 
@@ -125,13 +125,83 @@ Rectangle {
     }
 
     //-------------------------------------------------------------------------
+    //-- Settings
+    Item {
+        id: payloadSettingsButton
+
+        anchors.right:
+            brandingLogo.visible
+                ? brandingLogo.left
+                : parent.right
+
+        anchors.rightMargin:
+            ScreenTools.defaultFontPixelWidth
+
+        anchors.verticalCenter: parent.verticalCenter
+
+        width: Math.max(
+            36,
+            ScreenTools.defaultFontPixelHeight * 2.15
+        )
+
+        height: width
+
+        QGCColoredImage {
+            anchors.centerIn: parent
+
+            width: parent.width * 0.55
+            height: width
+            sourceSize.height: height
+            source: "/res/gear-black.svg"
+            color: "white"
+            fillMode: Image.PreserveAspectFit
+            mipmap: true
+
+            opacity:
+                payloadSettingsMouseArea.pressed
+                    ? 0.72
+                    : payloadSettingsMenu.visible
+                      || payloadSettingsMouseArea.containsMouse
+                        ? 1.0
+                        : 0.88
+
+            Behavior on opacity {
+                NumberAnimation { duration: 90 }
+            }
+        }
+
+        MouseArea {
+            id: payloadSettingsMouseArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+
+            onClicked: {
+                if (payloadSettingsMenu.visible) {
+                    payloadSettingsMenu.close()
+                } else {
+                    payloadSettingsMenu.open()
+                }
+            }
+        }
+    }
+
+    PayloadSettingsMenu {
+        id: payloadSettingsMenu
+        anchorItem: payloadSettingsButton
+        widgetSettings: DropWidgetSettings
+    }
+
+    //-------------------------------------------------------------------------
     //-- Branding Logo
     Image {
+        id:                     brandingLogo
         anchors.right:          parent.right
         anchors.top:            parent.top
         anchors.bottom:         parent.bottom
         anchors.margins:        ScreenTools.defaultFontPixelHeight * 0.66
-        visible:                _activeVehicle && !_communicationLost && x > (toolsFlickable.x + toolsFlickable.contentWidth + ScreenTools.defaultFontPixelWidth)
+        visible:                _activeVehicle && !_communicationLost && x > (toolsFlickable.x + toolsFlickable.contentWidth + payloadSettingsButton.width + ScreenTools.defaultFontPixelWidth * 2)
         fillMode:               Image.PreserveAspectFit
         source:                 _outdoorPalette ? _brandImageOutdoor : _brandImageIndoor
         mipmap:                 true

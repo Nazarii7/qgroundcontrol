@@ -72,6 +72,7 @@
 #include "VideoManager.h"
 #include "FlightDisplay/DropWidgetSettings.h"
 #include "FlightDisplay/DropWidgetJoystickBridge.h"
+#include "DoodleLinkManager.h"
 
 #ifndef QGC_DISABLE_MAVLINK_INSPECTOR
 #include "MAVLinkInspectorController.h"
@@ -102,15 +103,15 @@ static QObject *mavlinkSingletonFactory(QQmlEngine*, QJSEngine*)
 
 QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool simpleBootTest)
     : QApplication(argc, argv)
-    , _runningUnitTests(unitTesting)
-    , _simpleBootTest(simpleBootTest)
+      , _runningUnitTests(unitTesting)
+      , _simpleBootTest(simpleBootTest)
 {
     _msecsElapsedTime.start();
 
-    // Setup for network proxy support
+            // Setup for network proxy support
     QNetworkProxyFactory::setUseSystemConfiguration(true);
 
-    // Parse command line options
+            // Parse command line options
     bool fClearSettingsOptions = false; // Clear stored settings
     bool fClearCache = false;           // Clear parameter/airframe caches
     bool logging = false;               // Turn on logging
@@ -127,12 +128,12 @@ QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool s
 
     ParseCmdLineOptions(argc, argv, rgCmdLineOptions, std::size(rgCmdLineOptions), false);
 
-    // Set up timer for delayed missing fact display
+            // Set up timer for delayed missing fact display
     _missingParamsDelayedDisplayTimer.setSingleShot(true);
     _missingParamsDelayedDisplayTimer.setInterval(_missingParamsDelayedDisplayTimerTimeout);
     (void) connect(&_missingParamsDelayedDisplayTimer, &QTimer::timeout, this, &QGCApplication::_missingParamsDisplay);
 
-    // Set application information
+            // Set application information
     QString applicationName;
     if (_runningUnitTests || simpleBootTest) {
         // We don't want unit tests to use the same QSettings space as the normal app. So we tweak the app
@@ -155,7 +156,7 @@ QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool s
     setWindowIcon(QIcon(":/res/qgroundcontrol.ico"));
 #endif
 
-    // Set settings format
+            // Set settings format
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings settings;
     qCDebug(QGCApplicationLog) << "Settings location" << settings.fileName() << "Is writable?:" << settings.isWritable();
@@ -164,7 +165,7 @@ QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool s
         qCWarning(QGCApplicationLog) << "Setings location is not writable";
     }
 
-    // The setting will delete all settings on this boot
+            // The setting will delete all settings on this boot
     fClearSettingsOptions |= settings.contains(_deleteAllSettingsKey);
 
     if (_runningUnitTests || simpleBootTest) {
@@ -176,7 +177,7 @@ QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool s
         // User requested settings to be cleared on command line
         settings.clear();
 
-        // Clear parameter cache
+                // Clear parameter cache
         QDir paramDir(ParameterManager::parameterCacheDir());
         paramDir.removeRecursively();
         paramDir.mkpath(paramDir.absolutePath());
@@ -201,10 +202,10 @@ QGCApplication::QGCApplication(int &argc, char *argv[], bool unitTesting, bool s
         parameter.remove();
     }
 
-    // Set up our logging filters
+            // Set up our logging filters
     QGCLoggingCategoryRegister::instance()->setFilterRulesFromSettings(loggingOptions);
 
-    // We need to set language as early as possible prior to loading on JSON files.
+            // We need to set language as early as possible prior to loading on JSON files.
     setLanguage();
 
 #ifndef QGC_DAILY_BUILD
@@ -284,6 +285,7 @@ void QGCApplication::init()
     JoystickManager::registerQmlTypes();
     DropWidgetSettings::registerQmlSingleton();
     DropWidgetJoystickBridge::registerQmlSingleton();
+    DoodleLinkManager::registerQmlSingleton();
     SiYi::registerQmlSingleton();
 #ifdef QGC_VIEWER3D
     Viewer3DManager::registerQmlTypes();
@@ -315,7 +317,7 @@ void QGCApplication::init()
 
     qmlRegisterSingletonType<QGCMAVLink>("MAVLink", 1, 0, "MAVLink", mavlinkSingletonFactory);
 
-    // Although this should really be in _initForNormalAppBoot putting it here allowws us to create unit tests which pop up more easily
+            // Although this should really be in _initForNormalAppBoot putting it here allowws us to create unit tests which pop up more easily
     if(QFontDatabase::addApplicationFont(":/fonts/opensans") < 0) {
         qCWarning(QGCApplicationLog) << "Could not load /fonts/opensans font";
     }
@@ -336,7 +338,7 @@ void QGCApplication::init()
 void QGCApplication::_initVideo()
 {
 #ifdef QGC_GST_STREAMING
-    // Gstreamer video playback requires OpenGL
+   // Gstreamer video playback requires OpenGL
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 #endif
 
@@ -361,56 +363,57 @@ void QGCApplication::_initForNormalAppBoot()
     FollowMe::instance()->init();
     QGCPositionManager::instance()->init();
     LinkManager::instance()->init();
+    DoodleLinkManager::instance()->init();
     VideoManager::instance()->init(mainRootWindow());
 
-    // Image provider for Optical Flow
+            // Image provider for Optical Flow
     _qmlAppEngine->addImageProvider(_qgcImageProviderId, new QGCImageProvider());
 
-    // Safe to show popup error messages now that main window is created
+            // Safe to show popup error messages now that main window is created
     _showErrorsInToolbar = true;
 
-    #ifdef Q_OS_LINUX
-    #ifndef Q_OS_ANDROID
-    #ifndef QGC_NO_SERIAL_LINK
-        if (!_runningUnitTests) {
-            // Determine if we have the correct permissions to access USB serial devices
-            QFile permFile("/etc/group");
-            if(permFile.open(QIODevice::ReadOnly)) {
-                while(!permFile.atEnd()) {
-                    const QString line = permFile.readLine();
-                    if (line.contains("dialout") && !line.contains(getenv("USER"))) {
-                        permFile.close();
-                        showAppMessage(tr(
-                            "The current user does not have the correct permissions to access serial devices. "
-                            "You should also remove modemmanager since it also interferes.<br/><br/>"
-                            "If you are using Ubuntu, execute the following commands to fix these issues:<br/>"
-                            "<pre>sudo usermod -a -G dialout $USER<br/>"
-                            "sudo apt-get remove modemmanager</pre>"));
-                        break;
-                    }
+#ifdef Q_OS_LINUX
+#ifndef Q_OS_ANDROID
+#ifndef QGC_NO_SERIAL_LINK
+    if (!_runningUnitTests) {
+        // Determine if we have the correct permissions to access USB serial devices
+        QFile permFile("/etc/group");
+        if(permFile.open(QIODevice::ReadOnly)) {
+            while(!permFile.atEnd()) {
+                const QString line = permFile.readLine();
+                if (line.contains("dialout") && !line.contains(getenv("USER"))) {
+                    permFile.close();
+                    showAppMessage(tr(
+                        "The current user does not have the correct permissions to access serial devices. "
+                        "You should also remove modemmanager since it also interferes.<br/><br/>"
+                        "If you are using Ubuntu, execute the following commands to fix these issues:<br/>"
+                        "<pre>sudo usermod -a -G dialout $USER<br/>"
+                        "sudo apt-get remove modemmanager</pre>"));
+                    break;
                 }
-                permFile.close();
             }
+            permFile.close();
         }
-    #endif
-    #endif
-    #endif
+    }
+#endif
+#endif
+#endif
 
-    // Now that main window is up check for lost log files
+            // Now that main window is up check for lost log files
     MAVLinkProtocol::instance()->checkForLostLogFiles();
 
-    // Load known link configurations
+            // Load known link configurations
     LinkManager::instance()->loadLinkConfigurationList();
 
-    // Probe for joysticks
+            // Probe for joysticks
     JoystickManager::instance()->init();
 
     if (_settingsUpgraded) {
         showAppMessage(tr("The format for %1 saved settings has been modified. "
-                    "Your saved settings have been reset to defaults.").arg(applicationName()));
+                          "Your saved settings have been reset to defaults.").arg(applicationName()));
     }
 
-    // Connect links with flag AutoconnectLink
+            // Connect links with flag AutoconnectLink
     LinkManager::instance()->startAutoConnectedLinks();
 }
 
@@ -468,6 +471,16 @@ QObject *QGCApplication::_rootQmlObject()
 
 void QGCApplication::showCriticalVehicleMessage(const QString &message)
 {
+    _showCriticalVehicleMessage(message, false);
+}
+
+void QGCApplication::showCriticalVehicleStatusMessage(const QString &message)
+{
+    _showCriticalVehicleMessage(message, true);
+}
+
+void QGCApplication::_showCriticalVehicleMessage(const QString &message, bool fromVehicleStatusText)
+{
     // PreArm messages are handled by Vehicle and shown in Map
     if (message.startsWith(QStringLiteral("PreArm")) || message.startsWith(QStringLiteral("preflight"), Qt::CaseInsensitive)) {
         return;
@@ -477,7 +490,8 @@ void QGCApplication::showCriticalVehicleMessage(const QString &message)
     if (rootQmlObject && _showErrorsInToolbar) {
         QVariant varReturn;
         QVariant varMessage = QVariant::fromValue(message);
-        QMetaObject::invokeMethod(rootQmlObject, "showCriticalVehicleMessage", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, varMessage));
+        QVariant varFromVehicleStatusText = QVariant::fromValue(fromVehicleStatusText);
+        QMetaObject::invokeMethod(rootQmlObject, "showCriticalVehicleMessage", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, varMessage), Q_ARG(QVariant, varFromVehicleStatusText));
     } else if (runningUnitTests() || !_showErrorsInToolbar) {
         // Unit tests can run without UI
         qCDebug(QGCApplicationLog) << "QGCApplication::showCriticalVehicleMessage unittest" << message;
@@ -545,7 +559,7 @@ QQuickWindow *QGCApplication::mainRootWindow()
 void QGCApplication::showVehicleConfig()
 {
     if (_rootQmlObject()) {
-      QMetaObject::invokeMethod(_rootQmlObject(), "showVehicleConfig");
+        QMetaObject::invokeMethod(_rootQmlObject(), "showVehicleConfig");
     }
 }
 
@@ -589,8 +603,8 @@ void QGCApplication::_qgcCurrentStableVersionDownloadComplete(const QString &rem
             int majorVersion, minorVersion, buildVersion;
             if (_parseVersionText(version, majorVersion, minorVersion, buildVersion)) {
                 if (_majorVersion < majorVersion ||
-                        ((_majorVersion == majorVersion) && (_minorVersion < minorVersion)) ||
-                        ((_majorVersion == majorVersion) && (_minorVersion == minorVersion) && (_buildVersion < buildVersion))) {
+                    ((_majorVersion == majorVersion) && (_minorVersion < minorVersion)) ||
+                    ((_majorVersion == majorVersion) && (_minorVersion == minorVersion) && (_buildVersion < buildVersion))) {
                     showAppMessage(tr("There is a newer version of %1 available. You can download it from %2.").arg(applicationName()).arg(QGCCorePlugin::instance()->stableDownloadLocation()), tr("New Version Available"));
                 }
             }
@@ -763,7 +777,7 @@ void QGCApplication::shutdown()
 
     QGCCorePlugin::instance()->cleanup();
 
-    // This is bad, but currently qobject inheritances are incorrect and cause crashes on exit without
+            // This is bad, but currently qobject inheritances are incorrect and cause crashes on exit without
     delete _qmlAppEngine;
 }
 

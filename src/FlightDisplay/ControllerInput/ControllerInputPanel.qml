@@ -17,7 +17,15 @@ Item {
     id: root
 
     property real margin: 10
+    // Keep the horizontal edge independently configurable. By default it
+    // remains identical to margin, so existing placements are unchanged.
+    property real leftMargin: margin
     property real topOffset: margin
+    // Optional startup dock used by Fly View: place the panel immediately
+    // above the bottom-left inset (the PiP map), while preserving dragging.
+    property bool defaultAboveBottomInset: false
+    property real bottomInset: 0
+    property real bottomGap: margin
     property real panelWidth: 320
     property bool expanded: true
 
@@ -27,6 +35,7 @@ Item {
     property real panelY: -1
     property bool panelPositionReady: false
     property bool panelDragging: false
+    property bool panelManuallyPositioned: false
 
     property real dragStartPointerX: 0
     property real dragStartPointerY: 0
@@ -358,10 +367,21 @@ Item {
     }
 
     function defaultPanelX() {
+        if (root.defaultAboveBottomInset) {
+            return root.leftMargin
+        }
+
         return Math.max(root.margin, root.width - root.panelWidth - root.margin)
     }
 
     function defaultPanelY() {
+        if (root.defaultAboveBottomInset) {
+            return root.height
+                    - root.bottomInset
+                    - root.bottomGap
+                    - root.currentPanelHeight()
+        }
+
         return root.topOffset
     }
 
@@ -370,11 +390,11 @@ Item {
     }
 
     function boundedPanelPosition(x, y) {
-        var maxX = Math.max(root.margin, root.width - root.panelWidth - root.margin)
+        var maxX = Math.max(root.leftMargin, root.width - root.panelWidth - root.margin)
         var maxY = Math.max(root.margin, root.height - root.currentPanelHeight() - root.margin)
 
         return {
-            "x": root.clamp(x, root.margin, maxX),
+            "x": root.clamp(x, root.leftMargin, maxX),
             "y": root.clamp(y, root.margin, maxY)
         }
     }
@@ -398,6 +418,18 @@ Item {
         if (!root.panelPositionReady) {
             root.setPanelPositionLocal(root.defaultPanelX(), root.defaultPanelY())
         }
+    }
+
+    function refreshDefaultPanelPosition() {
+        if (!root.defaultAboveBottomInset
+                || root.panelManuallyPositioned
+                || root.panelDragging
+                || root.width <= 0
+                || root.height <= 0) {
+            return
+        }
+
+        root.setPanelPositionLocal(root.defaultPanelX(), root.defaultPanelY())
     }
 
     function keepPanelInBounds() {
@@ -473,7 +505,10 @@ Item {
             NumberAnimation { duration: 120 }
         }
 
-        onHeightChanged: root.keepPanelInBounds()
+        onHeightChanged: {
+            root.refreshDefaultPanelPosition()
+            root.keepPanelInBounds()
+        }
 
         Column {
             id: panelColumn
@@ -516,6 +551,7 @@ Item {
                     onPressed: function(mouse) {
                         var pointerPoint = pointerInRoot(mouse)
                         root.panelDragging = true
+                        root.panelManuallyPositioned = true
                         root.dragStartPointerX = pointerPoint.x
                         root.dragStartPointerY = pointerPoint.y
                         root.dragStartPanelX = root.panelX
@@ -1733,11 +1769,13 @@ Item {
 
     onWidthChanged: {
         root.initializePanelPosition()
+        root.refreshDefaultPanelPosition()
         root.keepPanelInBounds()
     }
 
     onHeightChanged: {
         root.initializePanelPosition()
+        root.refreshDefaultPanelPosition()
         root.keepPanelInBounds()
     }
 
@@ -1753,4 +1791,9 @@ Item {
             root.initializePanelPosition()
         }
     }
+
+    onLeftMarginChanged: root.refreshDefaultPanelPosition()
+    onBottomInsetChanged: root.refreshDefaultPanelPosition()
+    onBottomGapChanged: root.refreshDefaultPanelPosition()
+    onDefaultAboveBottomInsetChanged: root.refreshDefaultPanelPosition()
 }

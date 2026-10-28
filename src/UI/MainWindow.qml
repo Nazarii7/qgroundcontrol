@@ -84,7 +84,7 @@ ApplicationWindow {
         readonly property var       guidedControllerFlyView:        flyView.guidedController
 
         // Number of QGCTextField's with validation errors. Used to prevent closing panels with validation errors.
-        property int                validationErrorCount:           0 
+        property int                validationErrorCount:           0
 
         // Property to manage RemoteID quick access to settings page
         property bool               commingFromRIDIndicator:        false
@@ -170,7 +170,13 @@ ApplicationWindow {
 
     // This variant is only meant to be called by QGCApplication
     function _showMessageDialog(dialogTitle, dialogText) {
-        showMessageDialog(dialogTitle, dialogText)
+        // Command timeouts must remain visible to the operator without blocking
+        // flight controls behind a modal dialog and an OK button.
+        if (dialogTitle === "Vehicle Command Timeout") {
+            showCriticalVehicleMessage(dialogText)
+        } else {
+            showMessageDialog(dialogTitle, dialogText)
+        }
     }
 
     Component {
@@ -263,7 +269,7 @@ ApplicationWindow {
         color:          QGroundControl.globalPalette.window
     }
 
-    FlyView { 
+    FlyView {
         id:                     flyView
         anchors.fill:           parent
         utmspSendActTrigger:    _utmspSendActTrigger
@@ -538,107 +544,86 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Critical Vehicle Message Popup
+    //-- Single persistent lower message area
+    // The presenter belongs to MainWindow, never to the hideable Fly View HUD.
+    // Switching pages or clean-video mode changes only its layout, not its
+    // lifetime, queue, repeat counters, or renderer.
+    // Visual placement reference for the no-video label; no stream state.
+    property var videoStatusLayout: null
+    property var vehicleMessageLayout: null
+    readonly property var vehicleMessagePresenter: vehicleMessageOsd
+    property var _pendingVehicleMessages: []
+    readonly property bool vehicleMessageUsesFlyLayout:
+        vehicleMessageLayout !== null && vehicleMessageLayout.visible
+        && vehicleMessageLayout.width > 0
+        && flyView.visible && !planView.visible && !toolDrawer.visible
 
-    function showCriticalVehicleMessage(message) {
-        closeIndicatorDrawer()
-        if (criticalVehicleMessagePopup.visible || QGroundControl.videoManager.fullScreen) {
-            // We received additional warning message while an older warning message was still displayed.
-            // When the user close the older one drop the message indicator tool so they can see the rest of them.
-            criticalVehicleMessagePopup.additionalCriticalMessagesReceived = true
-        } else {
-            criticalVehicleMessagePopup.criticalVehicleMessage      = message
-            criticalVehicleMessagePopup.additionalCriticalMessagesReceived = false
-            criticalVehicleMessagePopup.open()
+    readonly property rect vehicleMessageArea: {
+        var viewport = mainWindow.contentItem
+        var margin = Math.max(8, ScreenTools.defaultFontPixelWidth * 2)
+        if (vehicleMessageUsesFlyLayout) {
+            var layout = vehicleMessageLayout
+            // Explicit x/y/width/height reads track anchor and inset changes.
+            var location = layout.parent.mapToItem(viewport, layout.x, layout.y)
+            return Qt.rect(location.x, location.y, layout.width, layout.height)
+        }
+        return Qt.rect(margin, 0, Math.max(0, viewport.width - margin * 2),
+                       Math.max(0, viewport.height - margin))
+    }
+
+    function routeVehicleMessageToOsd(message, fromVehicleStatusText) {
+        if (fromVehicleStatusText === true) {
+            // STATUSTEXT is already in the vehicle journal. Never insert a
+            // second local copy, including when a different page is open.
+            if (vehicleMessagePresenter._componentCompleted) {
+                vehicleMessagePresenter.synchronizeMessages()
+            }
+            return true
+        }
+        if (!vehicleMessagePresenter._componentCompleted) {
+            var pending = _pendingVehicleMessages.slice(0)
+            pending.push({ text: String(message), vehicle: globals.activeVehicle,
+                           hasVehicle: globals.activeVehicle !== null })
+            _pendingVehicleMessages = pending
+            return true
+        }
+        vehicleMessagePresenter.showLocalMessage(message)
+        return true
+    }
+
+    function flushPendingVehicleMessages() {
+        if (!vehicleMessagePresenter._componentCompleted) return
+        var pending = _pendingVehicleMessages
+        _pendingVehicleMessages = []
+        for (var index = 0; index < pending.length; ++index) {
+            var entry = pending[index]
+            if (!entry.hasVehicle || entry.vehicle === globals.activeVehicle) {
+                vehicleMessagePresenter.showLocalMessage(entry.text)
+            }
         }
     }
 
-    Popup {
-        id:                 criticalVehicleMessagePopup
-        y:                  ScreenTools.toolbarHeight + ScreenTools.defaultFontPixelHeight
-        x:                  Math.round((mainWindow.width - width) * 0.5)
-        width:              mainWindow.width  * 0.55
-        height:             criticalVehicleMessageText.contentHeight + ScreenTools.defaultFontPixelHeight * 2
-        modal:              false
-        focus:              true
+    function showCriticalVehicleMessage(message, fromVehicleStatusText) {
+        routeVehicleMessageToOsd(message, fromVehicleStatusText)
+    }
 
-        property alias  criticalVehicleMessage:             criticalVehicleMessageText.text
-        property bool   additionalCriticalMessagesReceived: false
+    StatusMessageOSD {
+        id: vehicleMessageOsd
+        objectName: "vehicleMessageOsd"
 
-        background: Rectangle {
-            anchors.fill:   parent
-            color:          qgcPal.alertBackground
-            radius:         ScreenTools.defaultFontPixelHeight * 0.5
-            border.color:   qgcPal.alertBorder
-            border.width:   2
+        parent: mainWindow.contentItem
+        z: 10000
+        // Keep the message block centered on the full viewport.
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Math.max(0, mainWindow.vehicleMessageArea.y
+                    + mainWindow.vehicleMessageArea.height - height)
+        maximumWidth: mainWindow.vehicleMessageArea.width
+        displayEnabled: true
+        vehicle: globals.activeVehicle
 
-            Rectangle {
-                anchors.horizontalCenter:   parent.horizontalCenter
-                anchors.top:                parent.top
-                anchors.topMargin:          -(height / 2)
-                color:                      qgcPal.alertBackground
-                radius:                     ScreenTools.defaultFontPixelHeight * 0.25
-                border.color:               qgcPal.alertBorder
-                border.width:               1
-                width:                      vehicleWarningLabel.contentWidth + _margins
-                height:                     vehicleWarningLabel.contentHeight + _margins
-
-                property real _margins: ScreenTools.defaultFontPixelHeight * 0.25
-
-                QGCLabel {
-                    id:                 vehicleWarningLabel
-                    anchors.centerIn:   parent
-                    text:               qsTr("Vehicle Error")
-                    font.pointSize:     ScreenTools.smallFontPointSize
-                    color:              qgcPal.alertText
-                }
-            }
-
-            Rectangle {
-                id:                         additionalErrorsIndicator
-                anchors.horizontalCenter:   parent.horizontalCenter
-                anchors.bottom:             parent.bottom
-                anchors.bottomMargin:       -(height / 2)
-                color:                      qgcPal.alertBackground
-                radius:                     ScreenTools.defaultFontPixelHeight * 0.25
-                border.color:               qgcPal.alertBorder
-                border.width:               1
-                width:                      additionalErrorsLabel.contentWidth + _margins
-                height:                     additionalErrorsLabel.contentHeight + _margins
-                visible:                    criticalVehicleMessagePopup.additionalCriticalMessagesReceived
-
-                property real _margins: ScreenTools.defaultFontPixelHeight * 0.25
-
-                QGCLabel {
-                    id:                 additionalErrorsLabel
-                    anchors.centerIn:   parent
-                    text:               qsTr("Additional errors received")
-                    font.pointSize:     ScreenTools.smallFontPointSize
-                    color:              qgcPal.alertText
-                }
-            }
-        }
-
-        QGCLabel {
-            id:                 criticalVehicleMessageText
-            width:              criticalVehicleMessagePopup.width - ScreenTools.defaultFontPixelHeight
-            anchors.centerIn:   parent
-            wrapMode:           Text.WordWrap
-            color:              qgcPal.alertText
-            textFormat:         TextEdit.RichText
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                criticalVehicleMessagePopup.close()
-                if (criticalVehicleMessagePopup.additionalCriticalMessagesReceived) {
-                    criticalVehicleMessagePopup.additionalCriticalMessagesReceived = false;
-                    flyView.dropMainStatusIndicatorTool();
-                } else {
-                    QGroundControl.multiVehicleManager.activeVehicle.resetErrorLevelMessages();
-                }
-            }
+        Component.onCompleted: Qt.callLater(mainWindow.flushPendingVehicleMessages)
+        onPresentationAvailableChanged: {
+            if (presentationAvailable) mainWindow.flushPendingVehicleMessages()
         }
     }
 
@@ -717,7 +702,7 @@ ApplicationWindow {
                     anchors.centerIn:   parent
                     text:               ">"
                     color:              QGroundControl.globalPalette.buttonText
-                }  
+                }
 
                 QGCMouseArea {
                     fillItem: parent

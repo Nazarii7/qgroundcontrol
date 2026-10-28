@@ -45,8 +45,20 @@ Rectangle {
     // avoids a reverse import from FlightMap back into FlightDisplay.
     property var widgetSettings: null
 
-    // UI-only state. It does not alter or reset the three widget settings.
-    property bool _widgetsSectionExpanded: true
+    // The top-right Fly View layer hosts this control inside a non-modal
+    // Popup so it can move freely across the complete flight view.
+    property var movementHost: null
+    property Item movementBounds: null
+    property real movementTopInset: 0
+
+    readonly property bool panelLocked:
+        widgetSettings ? Boolean(widgetSettings.photoVideoLocked) : true
+
+    property bool _panelDragging: false
+    property real _dragStartPointerX: 0
+    property real _dragStartPointerY: 0
+    property real _dragStartHostX: 0
+    property real _dragStartHostY: 0
 
     property real _margins:      Math.max(7, ScreenTools.defaultFontPixelHeight * 0.45)
     property real _smallMargins: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.5)
@@ -149,10 +161,6 @@ Rectangle {
             ? _canTakePhoto
             : (_canRecordVideo || _isShootingInCurrentMode)
 
-    // The settings gear is a permanent Fly View control. Camera-specific
-    // options are shown only when a MAVLink camera exists.
-    readonly property bool _canOpenSettings: true
-
     readonly property var _primaryBattery:
         _activeVehicle
         && _activeVehicle.batteries
@@ -189,6 +197,43 @@ Rectangle {
         readonly property int titleFontSize: 12
         readonly property int buttonFontSize: 10
         readonly property int smallFontSize: 9
+    }
+
+    function boundedHostPosition(x, y) {
+        if (!movementBounds || !movementHost) {
+            return Qt.point(x, y)
+        }
+
+        return Qt.point(
+            Math.max(0, Math.min(movementBounds.width - movementHost.width, x)),
+            Math.max(
+                movementTopInset,
+                Math.min(movementBounds.height - movementHost.height, y)
+            )
+        )
+    }
+
+    function applyHostPosition(pointerPoint) {
+        if (!movementHost) {
+            return
+        }
+
+        var position = boundedHostPosition(
+            _dragStartHostX + pointerPoint.x - _dragStartPointerX,
+            _dragStartHostY + pointerPoint.y - _dragStartPointerY
+        )
+
+        movementHost.x = position.x
+        movementHost.y = position.y
+    }
+
+    function saveHostPosition() {
+        if (widgetSettings && movementHost) {
+            widgetSettings.setPhotoVideoPosition(
+                movementHost.x,
+                movementHost.y
+            )
+        }
     }
 
     function factNumber(fact) {
@@ -303,16 +348,6 @@ Rectangle {
         } else {
             _camera.toggleVideoRecording()
         }
-    }
-
-    function openSettings() {
-        var dialog = settingsDialogComponent.createObject(mainWindow)
-        if (!dialog) {
-            console.warn("PhotoVideoControl: unable to create Settings dialog")
-            return
-        }
-
-        dialog.open()
     }
 
     DeadMouseArea {
@@ -546,44 +581,6 @@ Rectangle {
             }
         }
 
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 1
-            Layout.preferredWidth:
-                Math.max(27, ScreenTools.defaultFontPixelHeight * 1.55)
-            Layout.preferredHeight: Layout.preferredWidth
-
-            radius: pgrStyle.buttonRadius
-            color:
-                settingsMouseArea.pressed
-                    ? pgrStyle.buttonPressed
-                    : pgrStyle.buttonIdle
-            border.width: 1
-            border.color: pgrStyle.buttonBorder
-            opacity: 1.0
-
-            QGCColoredImage {
-                anchors.centerIn: parent
-                width:  parent.width * 0.58
-                height: width
-                sourceSize.height: height
-                source: "/res/gear-black.svg"
-                color: pgrStyle.textPrimary
-                fillMode: Image.PreserveAspectFit
-                mipmap: true
-            }
-
-            MouseArea {
-                id: settingsMouseArea
-
-                anchors.fill: parent
-                enabled: root._canOpenSettings
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.openSettings()
-            }
-        }
-
         ColumnLayout {
             id: trackingControls
 
@@ -641,928 +638,127 @@ Rectangle {
                 font.pixelSize: pgrStyle.smallFontSize
             }
         }
-    }
 
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 5
 
-        Component {
-            id: settingsDialogComponent
+            Rectangle {
+                id: moveHandle
 
-            Popup {
-                id: settingsPopup
+                Layout.preferredWidth: 34
+                Layout.preferredHeight: 28
+                visible: !root.panelLocked
 
-                parent: mainWindow.contentItem
+                radius: pgrStyle.buttonRadius
+                color:
+                    moveHandleMouseArea.pressed
+                        ? pgrStyle.buttonPressed
+                        : pgrStyle.buttonActive
+                border.width: 1
+                border.color: pgrStyle.buttonBorder
 
-                modal: true
-                focus: true
-                padding: 0
-
-                closePolicy:
-                    Popup.CloseOnEscape
-                    | Popup.CloseOnPressOutside
-
-                width:
-                    Math.max(
-                        ScreenTools.defaultFontPixelWidth * 31,
-                        292
-                    )
-
-                height: settingsContent.implicitHeight
-
-                x:
-                    parent
-                        ? Math.round((parent.width - width) / 2)
-                        : 0
-
-                y:
-                    parent
-                        ? Math.round((parent.height - height) / 2)
-                        : 0
-
-                property var _videoSettings:
-                    QGroundControl.settingsManager.videoSettings
-
-                property var _videoFitFact:
-                    _videoSettings
-                        ? _videoSettings.videoFit
-                        : null
-
-                Overlay.modal: Rectangle {
-                    color: Qt.rgba(0, 0, 0, 0.28)
+                QGCLabel {
+                    anchors.centerIn: parent
+                    text: "⋮⋮"
+                    color: pgrStyle.textPrimary
+                    font.pixelSize: 15
+                    font.bold: true
                 }
 
-                background: Rectangle {
-                    color: pgrStyle.panelBackground
-                    radius: pgrStyle.panelRadius
+                MouseArea {
+                    id: moveHandleMouseArea
 
-                    border.width: 1
-                    border.color: pgrStyle.panelBorder
-                }
+                    anchors.fill: parent
+                    enabled:
+                        !root.panelLocked
+                        && root.movementHost
+                        && root.movementBounds
+                    acceptedButtons: Qt.LeftButton
+                    hoverEnabled: true
+                    cursorShape: Qt.SizeAllCursor
+                    preventStealing: true
 
-                contentItem: ColumnLayout {
-                    id: settingsContent
-
-                    width: settingsPopup.width
-                    spacing: 0
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight:
-                            Math.max(
-                                44,
-                                ScreenTools.defaultFontPixelHeight * 2.5
-                            )
-
-                        color: Qt.rgba(1, 1, 1, 0.055)
-
-                        topLeftRadius: pgrStyle.panelRadius
-                        topRightRadius: pgrStyle.panelRadius
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: root._margins * 1.4
-                            anchors.rightMargin: root._margins
-                            spacing: root._smallMargins
-
-                            QGCLabel {
-                                Layout.fillWidth: true
-
-                                text: qsTr("Settings")
-                                color: pgrStyle.textPrimary
-
-                                font.pixelSize:
-                                    Math.max(
-                                        pgrStyle.titleFontSize,
-                                        ScreenTools.defaultFontPixelHeight
-                                    )
-                                font.bold: true
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth:
-                                    Math.max(
-                                        64,
-                                        ScreenTools.defaultFontPixelWidth * 8
-                                    )
-
-                                Layout.preferredHeight:
-                                    Math.max(
-                                        31,
-                                        ScreenTools.defaultFontPixelHeight * 1.75
-                                    )
-
-                                radius: pgrStyle.buttonRadius
-
-                                color:
-                                    closeMouseArea.pressed
-                                        ? pgrStyle.buttonPressed
-                                        : pgrStyle.buttonIdle
-
-                                border.width: 1
-                                border.color: pgrStyle.buttonBorder
-
-                                QGCLabel {
-                                    anchors.centerIn: parent
-
-                                    text: qsTr("Close")
-                                    color: pgrStyle.textPrimary
-                                    font.pixelSize: pgrStyle.buttonFontSize
-                                }
-
-                                MouseArea {
-                                    id: closeMouseArea
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: settingsPopup.close()
-                                }
-                            }
-                        }
+                    function pointerInBounds(mouse) {
+                        return mapToItem(
+                            root.movementBounds,
+                            mouse.x,
+                            mouse.y
+                        )
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.margins: root._margins * 1.4
-                        spacing:
-                            Math.max(
-                                10,
-                                ScreenTools.defaultFontPixelHeight * 0.65
-                            )
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: root._margins
-
-                            QGCLabel {
-                                Layout.fillWidth: true
-
-                                text: qsTr("Video Grid Lines")
-                                color: pgrStyle.textPrimary
-                                font.pixelSize: pgrStyle.buttonFontSize
-                            }
-
-                            Rectangle {
-                                id: gridLinesSwitch
-
-                                Layout.preferredWidth:
-                                    Math.max(
-                                        42,
-                                        ScreenTools.defaultFontPixelWidth * 5
-                                    )
-
-                                Layout.preferredHeight:
-                                    Math.max(
-                                        22,
-                                        ScreenTools.defaultFontPixelHeight * 1.25
-                                    )
-
-                                radius: height / 2
-
-                                color:
-                                    settingsPopup._videoSettings
-                                    && Boolean(
-                                        settingsPopup
-                                            ._videoSettings
-                                            .gridLines
-                                            .rawValue
-                                    )
-                                        ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
-                                        : pgrStyle.buttonIdle
-
-                                border.width: 1
-                                border.color: pgrStyle.buttonBorder
-
-                                Rectangle {
-                                    width: parent.height - 6
-                                    height: width
-                                    radius: width / 2
-
-                                    anchors.verticalCenter: parent.verticalCenter
-
-                                    x:
-                                        settingsPopup._videoSettings
-                                        && Boolean(
-                                            settingsPopup
-                                                ._videoSettings
-                                                .gridLines
-                                                .rawValue
-                                        )
-                                            ? parent.width - width - 3
-                                            : 3
-
-                                    color: pgrStyle.textPrimary
-
-                                    Behavior on x {
-                                        NumberAnimation {
-                                            duration: 110
-                                        }
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: {
-                                        if (!settingsPopup._videoSettings) {
-                                            return
-                                        }
-
-                                        var gridFact =
-                                            settingsPopup
-                                                ._videoSettings
-                                                .gridLines
-
-                                        gridFact.rawValue =
-                                            Boolean(gridFact.rawValue)
-                                                ? 0
-                                                : 1
-                                    }
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: root._margins
-
-                            QGCLabel {
-                                Layout.fillWidth: true
-
-                                text: qsTr("Video Screen Fit")
-                                color: pgrStyle.textPrimary
-                                font.pixelSize: pgrStyle.buttonFontSize
-                            }
-
-                            ComboBox {
-                                id: videoFitCombo
-
-                                Layout.preferredWidth:
-                                    Math.max(
-                                        112,
-                                        ScreenTools.defaultFontPixelWidth * 13
-                                    )
-
-                                Layout.preferredHeight:
-                                    Math.max(
-                                        32,
-                                        ScreenTools.defaultFontPixelHeight * 1.8
-                                    )
-
-                                // Match SIYI QGC exactly. The underlying QGC
-                                // Fact may contain legacy fourth-mode metadata,
-                                // but this UI intentionally exposes only these
-                                // three supported modes.
-                                model: [
-                                    qsTr("Fit Width"),
-                                    qsTr("Fit Height"),
-                                    qsTr("Stretch")
-                                ]
-
-                                currentIndex: {
-                                    var fact =
-                                        settingsPopup._videoFitFact
-
-                                    if (!fact) {
-                                        return 0
-                                    }
-
-                                    var value = Number(fact.rawValue)
-
-                                    if (!isFinite(value)) {
-                                        return 0
-                                    }
-
-                                    // A previously saved legacy value 3 is
-                                    // treated as Stretch.
-                                    return Math.max(
-                                        0,
-                                        Math.min(2, value)
-                                    )
-                                }
-
-                                onActivated: (index) => {
-                                    var fact =
-                                        settingsPopup._videoFitFact
-
-                                    if (!fact) {
-                                        return
-                                    }
-
-                                    // FlightDisplayViewVideo reads this exact
-                                    // numeric raw value: 0, 1 or 2.
-                                    fact.rawValue = index
-                                }
-
-                                contentItem: Text {
-                                    leftPadding: 10
-                                    rightPadding: videoFitCombo.indicator.width + 10
-
-                                    text: videoFitCombo.displayText
-                                    color: pgrStyle.textPrimary
-
-                                    font.pixelSize:
-                                        pgrStyle.buttonFontSize
-
-                                    verticalAlignment:
-                                        Text.AlignVCenter
-
-                                    elide: Text.ElideRight
-                                }
-
-                                indicator: Canvas {
-                                    x:
-                                        videoFitCombo.width
-                                        - width
-                                        - 9
-
-                                    y:
-                                        Math.round(
-                                            (videoFitCombo.height - height) / 2
-                                        )
-
-                                    width: 10
-                                    height: 6
-
-                                    onPaint: {
-                                        var ctx = getContext("2d")
-                                        ctx.reset()
-                                        ctx.beginPath()
-                                        ctx.moveTo(0, 0)
-                                        ctx.lineTo(width, 0)
-                                        ctx.lineTo(width / 2, height)
-                                        ctx.closePath()
-                                        ctx.fillStyle =
-                                            pgrStyle.textPrimary
-                                        ctx.fill()
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    radius: pgrStyle.buttonRadius
-
-                                    color:
-                                        videoFitCombo.pressed
-                                            ? pgrStyle.buttonPressed
-                                            : pgrStyle.buttonIdle
-
-                                    border.width: 1
-                                    border.color:
-                                        videoFitCombo.activeFocus
-                                            ? Qt.rgba(1, 1, 1, 0.36)
-                                            : pgrStyle.buttonBorder
-                                }
-
-                                delegate: ItemDelegate {
-                                    width: videoFitCombo.width
-                                    height:
-                                        Math.max(
-                                            32,
-                                            ScreenTools.defaultFontPixelHeight
-                                            * 1.8
-                                        )
-
-                                    highlighted:
-                                        videoFitCombo.highlightedIndex
-                                        === index
-
-                                    contentItem: Text {
-                                        leftPadding: 8
-
-                                        text: modelData
-                                        color: pgrStyle.textPrimary
-
-                                        font.pixelSize:
-                                            pgrStyle.buttonFontSize
-
-                                        verticalAlignment:
-                                            Text.AlignVCenter
-                                    }
-
-                                    background: Rectangle {
-                                        radius: pgrStyle.buttonRadius
-
-                                        color:
-                                            parent.highlighted
-                                                ? pgrStyle.buttonActive
-                                                : "transparent"
-                                    }
-                                }
-
-                                popup: Popup {
-                                    y: videoFitCombo.height + 4
-                                    width: videoFitCombo.width
-
-                                    padding: 4
-
-                                    implicitHeight:
-                                        Math.min(
-                                            contentItem.implicitHeight
-                                            + topPadding
-                                            + bottomPadding,
-                                            220
-                                        )
-
-                                    contentItem: ListView {
-                                        clip: true
-
-                                        implicitHeight: contentHeight
-
-                                        model:
-                                            videoFitCombo.popup.visible
-                                                ? videoFitCombo.delegateModel
-                                                : null
-
-                                        currentIndex:
-                                            videoFitCombo.highlightedIndex
-                                    }
-
-                                    background: Rectangle {
-                                        color:
-                                            Qt.rgba(
-                                                0.08,
-                                                0.10,
-                                                0.13,
-                                                0.98
-                                            )
-
-                                        radius: pgrStyle.buttonRadius
-
-                                        border.width: 1
-                                        border.color:
-                                            pgrStyle.panelBorder
-                                    }
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: pgrStyle.panelBorder
-                            opacity: 0.7
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: root._smallMargins
-
-                            QGCLabel {
-                                Layout.fillWidth: true
-
-                                text: qsTr("Widgets")
-                                color: pgrStyle.textPrimary
-                                font.pixelSize: pgrStyle.buttonFontSize
-                                font.bold: true
-                            }
-
-                            Rectangle {
-                                id: widgetsSectionToggleButton
-
-                                Layout.preferredWidth:
-                                    Math.max(
-                                        28,
-                                        ScreenTools.defaultFontPixelHeight * 1.65
-                                    )
-
-                                Layout.preferredHeight:
-                                    Layout.preferredWidth
-
-                                radius: pgrStyle.buttonRadius
-
-                                color:
-                                    widgetsSectionToggleMouseArea.containsMouse
-                                        ? pgrStyle.buttonHover
-                                        : pgrStyle.buttonIdle
-
-                                border.width: 1
-                                border.color: pgrStyle.buttonBorder
-
-                                QGCLabel {
-                                    anchors.centerIn: parent
-
-                                    text:
-                                        root._widgetsSectionExpanded
-                                            ? "−"
-                                            : "+"
-
-                                    color: pgrStyle.textPrimary
-                                    font.pixelSize:
-                                        Math.max(
-                                            pgrStyle.buttonFontSize,
-                                            ScreenTools.defaultFontPixelHeight
-                                        )
-
-                                    font.bold: true
-                                }
-
-                                MouseArea {
-                                    id: widgetsSectionToggleMouseArea
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: {
-                                        root._widgetsSectionExpanded =
-                                            !root._widgetsSectionExpanded
-                                    }
-                                }
-                            }
-                        }
-
-                        Item {
-                            id: widgetsSectionBody
-
-                            Layout.fillWidth: true
-                            Layout.preferredHeight:
-                                root._widgetsSectionExpanded
-                                    ? widgetsSectionColumn.implicitHeight
-                                    : 0
-
-                            Layout.minimumHeight: 0
-                            clip: true
-
-                            ColumnLayout {
-                                id: widgetsSectionColumn
-
-                                width: parent.width
-                                spacing: root._smallMargins
-                                visible: root._widgetsSectionExpanded
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: root._margins
-
-                        QGCLabel {
-                            Layout.fillWidth: true
-
-                            text: qsTr("Camera Controls")
-                            color: pgrStyle.textPrimary
-                            font.pixelSize: pgrStyle.buttonFontSize
-                        }
-
-                        Rectangle {
-                            id: cameraControlsVisibilitySwitch
-
-                            Layout.preferredWidth:
-                                Math.max(
-                                    42,
-                                    ScreenTools.defaultFontPixelWidth * 5
-                                )
-
-                            Layout.preferredHeight:
-                                Math.max(
-                                    22,
-                                    ScreenTools.defaultFontPixelHeight * 1.25
-                                )
-
-                            radius: height / 2
-
-                            color:
-                                root.widgetSettings
-                                && Boolean(
-                                    root
-                                        .widgetSettings
-                                        .cameraControlsVisible
-                                )
-                                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
-                                    : pgrStyle.buttonIdle
-
-                            border.width: 1
-                            border.color: pgrStyle.buttonBorder
-                            opacity: root.widgetSettings ? 1.0 : 0.45
-
-                            Rectangle {
-                                width: parent.height - 6
-                                height: width
-                                radius: width / 2
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                x:
-                                    root.widgetSettings
-                                    && Boolean(
-                                        root
-                                            .widgetSettings
-                                            .cameraControlsVisible
-                                    )
-                                        ? parent.width - width - 3
-                                        : 3
-
-                                color: pgrStyle.textPrimary
-
-                                Behavior on x {
-                                    NumberAnimation {
-                                        duration: 110
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.widgetSettings !== null
-                                hoverEnabled: true
-                                cursorShape:
-                                    enabled
-                                        ? Qt.PointingHandCursor
-                                        : Qt.ArrowCursor
-
-                                onClicked: {
-                                    root
-                                        .widgetSettings
-                                        .cameraControlsVisible =
-                                            !Boolean(
-                                                root
-                                                    .widgetSettings
-                                                    .cameraControlsVisible
-                                            )
-                                }
-                            }
-                        }
+                    onPressed: function(mouse) {
+                        var pointerPoint = pointerInBounds(mouse)
+                        root._panelDragging = true
+                        root._dragStartPointerX = pointerPoint.x
+                        root._dragStartPointerY = pointerPoint.y
+                        root._dragStartHostX = root.movementHost.x
+                        root._dragStartHostY = root.movementHost.y
+                        mouse.accepted = true
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: root._margins
-
-                        QGCLabel {
-                            Layout.fillWidth: true
-
-                            text: qsTr("Drop Widget")
-                            color: pgrStyle.textPrimary
-                            font.pixelSize: pgrStyle.buttonFontSize
+                    onPositionChanged: function(mouse) {
+                        if (!pressed || !root._panelDragging) {
+                            return
                         }
 
-                        Rectangle {
-                            id: dropWidgetVisibilitySwitch
-
-                            Layout.preferredWidth:
-                                Math.max(
-                                    42,
-                                    ScreenTools.defaultFontPixelWidth * 5
-                                )
-
-                            Layout.preferredHeight:
-                                Math.max(
-                                    22,
-                                    ScreenTools.defaultFontPixelHeight * 1.25
-                                )
-
-                            radius: height / 2
-
-                            color:
-                                root.widgetSettings
-                                && Boolean(
-                                    root
-                                        .widgetSettings
-                                        .dropWidgetVisible
-                                )
-                                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
-                                    : pgrStyle.buttonIdle
-
-                            border.width: 1
-                            border.color: pgrStyle.buttonBorder
-                            opacity: root.widgetSettings ? 1.0 : 0.45
-
-                            Rectangle {
-                                width: parent.height - 6
-                                height: width
-                                radius: width / 2
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                x:
-                                    root.widgetSettings
-                                    && Boolean(
-                                        root
-                                            .widgetSettings
-                                            .dropWidgetVisible
-                                    )
-                                        ? parent.width - width - 3
-                                        : 3
-
-                                color: pgrStyle.textPrimary
-
-                                Behavior on x {
-                                    NumberAnimation {
-                                        duration: 110
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.widgetSettings !== null
-                                hoverEnabled: true
-                                cursorShape:
-                                    enabled
-                                        ? Qt.PointingHandCursor
-                                        : Qt.ArrowCursor
-
-                                onClicked: {
-                                    root
-                                        .widgetSettings
-                                        .dropWidgetVisible =
-                                            !Boolean(
-                                                root
-                                                    .widgetSettings
-                                                    .dropWidgetVisible
-                                            )
-                                }
-                            }
-                        }
+                        root.applyHostPosition(pointerInBounds(mouse))
+                        mouse.accepted = true
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: root._margins
-
-                        QGCLabel {
-                            Layout.fillWidth: true
-
-                            text: qsTr("Controller Input")
-                            color: pgrStyle.textPrimary
-                            font.pixelSize: pgrStyle.buttonFontSize
+                    onReleased: function(mouse) {
+                        if (root._panelDragging) {
+                            root.applyHostPosition(pointerInBounds(mouse))
                         }
 
-                        Rectangle {
-                            id: controllerInputVisibilitySwitch
-
-                            Layout.preferredWidth:
-                                Math.max(
-                                    42,
-                                    ScreenTools.defaultFontPixelWidth * 5
-                                )
-
-                            Layout.preferredHeight:
-                                Math.max(
-                                    22,
-                                    ScreenTools.defaultFontPixelHeight * 1.25
-                                )
-
-                            radius: height / 2
-
-                            color:
-                                root.widgetSettings
-                                && Boolean(
-                                    root
-                                        .widgetSettings
-                                        .controllerInputVisible
-                                )
-                                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
-                                    : pgrStyle.buttonIdle
-
-                            border.width: 1
-                            border.color: pgrStyle.buttonBorder
-                            opacity: root.widgetSettings ? 1.0 : 0.45
-
-                            Rectangle {
-                                width: parent.height - 6
-                                height: width
-                                radius: width / 2
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                x:
-                                    root.widgetSettings
-                                    && Boolean(
-                                        root
-                                            .widgetSettings
-                                            .controllerInputVisible
-                                    )
-                                        ? parent.width - width - 3
-                                        : 3
-
-                                color: pgrStyle.textPrimary
-
-                                Behavior on x {
-                                    NumberAnimation {
-                                        duration: 110
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.widgetSettings !== null
-                                hoverEnabled: true
-                                cursorShape:
-                                    enabled
-                                        ? Qt.PointingHandCursor
-                                        : Qt.ArrowCursor
-
-                                onClicked: {
-                                    root
-                                        .widgetSettings
-                                        .controllerInputVisible =
-                                            !Boolean(
-                                                root
-                                                    .widgetSettings
-                                                    .controllerInputVisible
-                                            )
-                                }
-                            }
-                        }
+                        root._panelDragging = false
+                        root.saveHostPosition()
+                        mouse.accepted = true
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: root._margins
-
-                        QGCLabel {
-                            Layout.fillWidth: true
-
-                            text: qsTr("Camera Logs")
-                            color: pgrStyle.textPrimary
-                            font.pixelSize: pgrStyle.buttonFontSize
-                        }
-
-                        Rectangle {
-                            id: cameraLogsVisibilitySwitch
-
-                            Layout.preferredWidth:
-                                Math.max(
-                                    42,
-                                    ScreenTools.defaultFontPixelWidth * 5
-                                )
-
-                            Layout.preferredHeight:
-                                Math.max(
-                                    22,
-                                    ScreenTools.defaultFontPixelHeight * 1.25
-                                )
-
-                            radius: height / 2
-
-                            color:
-                                root.widgetSettings
-                                && Boolean(
-                                    root
-                                        .widgetSettings
-                                        .cameraLogsVisible
-                                )
-                                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
-                                    : pgrStyle.buttonIdle
-
-                            border.width: 1
-                            border.color: pgrStyle.buttonBorder
-                            opacity: root.widgetSettings ? 1.0 : 0.45
-
-                            Rectangle {
-                                width: parent.height - 6
-                                height: width
-                                radius: width / 2
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                x:
-                                    root.widgetSettings
-                                    && Boolean(
-                                        root
-                                            .widgetSettings
-                                            .cameraLogsVisible
-                                    )
-                                        ? parent.width - width - 3
-                                        : 3
-
-                                color: pgrStyle.textPrimary
-
-                                Behavior on x {
-                                    NumberAnimation {
-                                        duration: 110
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.widgetSettings !== null
-                                hoverEnabled: true
-                                cursorShape:
-                                    enabled
-                                        ? Qt.PointingHandCursor
-                                        : Qt.ArrowCursor
-
-                                onClicked: {
-                                    root
-                                        .widgetSettings
-                                        .cameraLogsVisible =
-                                            !Boolean(
-                                                root
-                                                    .widgetSettings
-                                                    .cameraLogsVisible
-                                            )
-                                }
-                            }
-                        }
-                    }
-                            }
-                        }
-
+                    onCanceled: {
+                        root._panelDragging = false
+                        root.saveHostPosition()
                     }
                 }
+            }
 
-                onClosed: destroy()
+            Rectangle {
+                Layout.preferredWidth: 34
+                Layout.preferredHeight: 28
+
+                radius: pgrStyle.buttonRadius
+                color:
+                    lockMouseArea.pressed
+                        ? pgrStyle.buttonPressed
+                        : root.panelLocked
+                          ? pgrStyle.buttonIdle
+                          : pgrStyle.buttonActive
+                border.width: 1
+                border.color: pgrStyle.buttonBorder
+
+                QGCLabel {
+                    anchors.centerIn: parent
+                    text: root.panelLocked ? "🔒" : "🔓"
+                    color: pgrStyle.textPrimary
+                    font.pixelSize: 14
+                }
+
+                MouseArea {
+                    id: lockMouseArea
+
+                    anchors.fill: parent
+                    enabled: Boolean(root.widgetSettings)
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    onClicked: {
+                        root.widgetSettings.photoVideoLocked =
+                            !root.panelLocked
+                    }
+                }
             }
         }
+    }
 
 }

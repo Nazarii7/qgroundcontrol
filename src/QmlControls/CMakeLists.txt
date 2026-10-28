@@ -217,6 +217,7 @@ qt_add_qml_module(QGroundControlControlsModule
         FlightModeMenuIndicator.qml
         FlyViewToolBar.qml
         FlyViewToolBarIndicators.qml
+        PayloadSettingsMenu.qml
         GPSIndicator.qml
         GPSIndicatorPage.qml
         MainStatusIndicator.qml
@@ -229,7 +230,7 @@ qt_add_qml_module(QGroundControlControlsModule
         # src/QtLocationPlugin/QMLControl/
         OfflineMapEditor.qml
 
-    NO_PLUGIN # Required by Qt 6.6.3. TODO: Remove when no longer supported.
+    NO_PLUGIN
 )
 
 qt_add_library(ScreenToolsModule STATIC)

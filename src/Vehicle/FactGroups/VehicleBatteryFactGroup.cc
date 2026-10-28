@@ -18,6 +18,7 @@ VehicleBatteryFactGroup::VehicleBatteryFactGroup(uint8_t batteryId, QObject *par
     _addFact(&_batteryFunctionFact);
     _addFact(&_batteryTypeFact);
     _addFact(&_voltageFact);
+    _addFact(&_cellVoltageFact);
     _addFact(&_currentFact);
     _addFact(&_mahConsumedFact);
     _addFact(&_temperatureFact);
@@ -31,6 +32,7 @@ VehicleBatteryFactGroup::VehicleBatteryFactGroup(uint8_t batteryId, QObject *par
     _batteryFunctionFact.setRawValue(MAV_BATTERY_FUNCTION_UNKNOWN);
     _batteryTypeFact.setRawValue(MAV_BATTERY_TYPE_UNKNOWN);
     _voltageFact.setRawValue(qQNaN());
+    _cellVoltageFact.setRawValue(qQNaN());
     _currentFact.setRawValue(qQNaN());
     _mahConsumedFact.setRawValue(qQNaN());
     _temperatureFact.setRawValue(qQNaN());
@@ -45,17 +47,17 @@ VehicleBatteryFactGroup::VehicleBatteryFactGroup(uint8_t batteryId, QObject *par
 void VehicleBatteryFactGroup::handleMessage(Vehicle *vehicle, const mavlink_message_t &message)
 {
     switch (message.msgid) {
-    case MAVLINK_MSG_ID_HIGH_LATENCY:
-        _handleHighLatency(vehicle, message);
-        break;
-    case MAVLINK_MSG_ID_HIGH_LATENCY2:
-        _handleHighLatency2(vehicle, message);
-        break;
-    case MAVLINK_MSG_ID_BATTERY_STATUS:
-        _handleBatteryStatus(vehicle, message);
-        break;
-    default:
-        break;
+        case MAVLINK_MSG_ID_HIGH_LATENCY:
+            _handleHighLatency(vehicle, message);
+            break;
+        case MAVLINK_MSG_ID_HIGH_LATENCY2:
+            _handleHighLatency2(vehicle, message);
+            break;
+        case MAVLINK_MSG_ID_BATTERY_STATUS:
+            _handleBatteryStatus(vehicle, message);
+            break;
+        default:
+            break;
     }
 }
 
@@ -89,6 +91,7 @@ void VehicleBatteryFactGroup::_handleBatteryStatus(Vehicle *vehicle, const mavli
     VehicleBatteryFactGroup *const group = _findOrAddBatteryGroupById(vehicle, batteryStatus.id);
 
     double totalVoltage = qQNaN();
+    int validCellCount = 0;
     for (int i = 0; i < 10; i++) {
         const double cellVoltage = ((batteryStatus.voltages[i] == UINT16_MAX)) ? qQNaN() : (static_cast<double>(batteryStatus.voltages[i]) / 1000.0);
         if (qIsNaN(cellVoltage)) {
@@ -99,6 +102,7 @@ void VehicleBatteryFactGroup::_handleBatteryStatus(Vehicle *vehicle, const mavli
         } else {
             totalVoltage += cellVoltage;
         }
+        ++validCellCount;
     }
 
     for (int i = 0; i < 4; i++) {
@@ -107,12 +111,21 @@ void VehicleBatteryFactGroup::_handleBatteryStatus(Vehicle *vehicle, const mavli
             break;
         }
         totalVoltage += cellVoltage;
+        ++validCellCount;
     }
+
+            // MAVLink BATTERY_STATUS may place total pack voltage in voltages[0]
+            // when per-cell telemetry is unavailable. Only expose V/cell when more
+            // than one actual cell entry is present; otherwise keep the fact unknown.
+    const double averageCellVoltage = (!qIsNaN(totalVoltage) && validCellCount > 1)
+                                          ? (totalVoltage / static_cast<double>(validCellCount))
+                                          : qQNaN();
 
     group->function()->setRawValue(batteryStatus.battery_function);
     group->type()->setRawValue(batteryStatus.type);
     group->temperature()->setRawValue((batteryStatus.temperature == INT16_MAX) ? qQNaN() : (static_cast<double>(batteryStatus.temperature) / 100.0));
     group->voltage()->setRawValue(totalVoltage);
+    group->cellVoltage()->setRawValue(averageCellVoltage);
     group->current()->setRawValue((batteryStatus.current_battery == -1) ? qQNaN() : (static_cast<double>(batteryStatus.current_battery) / 100.0));
     group->mahConsumed()->setRawValue((batteryStatus.current_consumed == -1) ? qQNaN() : batteryStatus.current_consumed);
     group->percentRemaining()->setRawValue((batteryStatus.battery_remaining == -1) ? qQNaN() : batteryStatus.battery_remaining);
@@ -126,18 +139,18 @@ void VehicleBatteryFactGroup::_handleBatteryStatus(Vehicle *vehicle, const mavli
 void VehicleBatteryFactGroup::handleMessageForFactGroupCreation(Vehicle *vehicle, const mavlink_message_t &message)
 {
     switch (message.msgid) {
-    case MAVLINK_MSG_ID_HIGH_LATENCY:
-    case MAVLINK_MSG_ID_HIGH_LATENCY2:
-        _findOrAddBatteryGroupById(vehicle, 0);
-        break;
-    case MAVLINK_MSG_ID_BATTERY_STATUS:
-    {
-        mavlink_battery_status_t batteryStatus{};
-        mavlink_msg_battery_status_decode(&message, &batteryStatus);
-        _findOrAddBatteryGroupById(vehicle, batteryStatus.id);
-    }
-    default:
-        break;
+        case MAVLINK_MSG_ID_HIGH_LATENCY:
+        case MAVLINK_MSG_ID_HIGH_LATENCY2:
+            _findOrAddBatteryGroupById(vehicle, 0);
+            break;
+        case MAVLINK_MSG_ID_BATTERY_STATUS:
+        {
+            mavlink_battery_status_t batteryStatus{};
+            mavlink_msg_battery_status_decode(&message, &batteryStatus);
+            _findOrAddBatteryGroupById(vehicle, batteryStatus.id);
+        }
+        default:
+            break;
     }
 }
 
@@ -145,7 +158,7 @@ VehicleBatteryFactGroup *VehicleBatteryFactGroup::_findOrAddBatteryGroupById(Veh
 {
     QmlObjectListModel *const batteries = vehicle->batteries();
 
-    // We maintain the list in order sorted by battery id so the ui shows them sorted.
+            // We maintain the list in order sorted by battery id so the ui shows them sorted.
     for (int i = 0; i < batteries->count(); i++) {
         VehicleBatteryFactGroup *const group = batteries->value<VehicleBatteryFactGroup*>(i);
         const int listBatteryId = group->id()->rawValue().toInt();

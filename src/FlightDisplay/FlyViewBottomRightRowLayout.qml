@@ -10,23 +10,15 @@
 import QtQuick
 import QtQuick.Layouts
 
-import QGroundControl
-import QGroundControl.Controls
-import QGroundControl.FlightDisplay
-
+// Keep the standard bottom-right row empty. The original TelemetryValuesBar
+// and FlyViewInstrumentPanel (the native compass) stay removed. The custom
+// artificial horizon is mounted from FlyViewCustomLayer.qml instead.
 RowLayout {
-    TelemetryValuesBar {
-        objectName: "pgrDarkTelemetryBar"
+    spacing: 0
+    visible: false
 
-        Layout.alignment:       Qt.AlignBottom
-        extraWidth:             instrumentPanel.extraValuesWidth
-        settingsGroup:          factValueGrid.telemetryBarSettingsGroup
-        specificVehicleForCard: null // Tracks active vehicle
-    }
-
-    FlyViewInstrumentPanel {
-        id:                 instrumentPanel
-        Layout.alignment:   Qt.AlignBottom
-        visible:            QGroundControl.corePlugin.options.flyView.showInstrumentPanel && _showSingleVehicleUI
-    }
+    width: 0
+    height: 0
+    implicitWidth: 0
+    implicitHeight: 0
 }

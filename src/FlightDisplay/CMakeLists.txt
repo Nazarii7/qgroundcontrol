@@ -47,6 +47,15 @@ qt_add_qml_module(FlightDisplayModule
         FlyViewTopRightColumnLayout.qml
         FlyViewTopRightPanel.qml
         FlyViewVideo.qml
+        OSD/AltitudeTapeOSD.qml
+        OSD/ArtificialHorizonOSD.qml
+        OSD/BatteryOSD.qml
+        OSD/CompassOSD.qml
+        OSD/FlightModeOSD.qml
+        OSD/GpsOSD.qml
+        OSD/HomeFlightInfoOSD.qml
+        OSD/LinkOSD.qml
+        OSD/StatusMessageOSD.qml
         PGRCamera/PGRCameraMouseController.qml
         PGRCamera/PGRCameraOverlay.qml
         PGRCamera/controls/PGRCameraButton.qml

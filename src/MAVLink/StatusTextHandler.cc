@@ -12,15 +12,18 @@
 
 #include <QtCore/QTimer>
 #include <QtCore/QDateTime>
+#include <QtCore/QVariantMap>
 
 QGC_LOGGING_CATEGORY(StatusTextHandlerLog, "qgc.mavlink.statustexthandler")
 
-StatusText::StatusText(MAV_COMPONENT componentid, MAV_SEVERITY severity, const QString &text)
+StatusText::StatusText(MAV_COMPONENT componentid, MAV_SEVERITY severity, const QString &text, const QString &timestamp, quint64 id)
     : m_compId(componentid)
-    , m_severity(severity)
-    , m_text(text)
+      , m_severity(severity)
+      , m_text(text)
+      , m_timestamp(timestamp)
+      , m_id(id)
 {
-    // qCDebug(StatusTextHandlerLog) << Q_FUNC_INFO << this;
+   // qCDebug(StatusTextHandlerLog) << Q_FUNC_INFO << this;
 }
 
 bool StatusText::severityIsError() const
@@ -39,7 +42,7 @@ bool StatusText::severityIsError() const
 
 StatusTextHandler::StatusTextHandler(QObject *parent)
     : QObject(parent)
-    , m_chunkedStatusTextTimer(new QTimer(this))
+      , m_chunkedStatusTextTimer(new QTimer(this))
 {
     // qCDebug(StatusTextHandlerLog) << Q_FUNC_INFO << this;
 
@@ -52,7 +55,7 @@ StatusTextHandler::~StatusTextHandler()
 {
     clearMessages();
 
-    // qCDebug(StatusTextHandlerLog) << Q_FUNC_INFO << this;
+            // qCDebug(StatusTextHandlerLog) << Q_FUNC_INFO << this;
 }
 
 QString StatusTextHandler::getMessageText(const mavlink_message_t &message)
@@ -62,7 +65,7 @@ QString StatusTextHandler::getMessageText(const mavlink_message_t &message)
     b.resize(MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN + 1);
     (void) mavlink_msg_statustext_get_text(&message, b.data());
 
-    // Ensure NUL-termination
+            // Ensure NUL-termination
     b[b.length()-1] = '\0';
 
     const QString text = QString::fromLocal8Bit(b.constData(), std::strlen(b.constData()));
@@ -80,8 +83,32 @@ QString StatusTextHandler::formattedMessages() const
     return result;
 }
 
+QVariantList StatusTextHandler::statusTextMessages() const
+{
+    QVariantList result;
+    result.reserve(m_messages.size());
+
+            // Match VehicleMessageList.qml: newest messages are shown first.
+    for (qsizetype index = m_messages.size(); index > 0; --index) {
+        const StatusText *const message = m_messages.at(index - 1);
+
+        QVariantMap item;
+        item.insert(QStringLiteral("componentId"), static_cast<int>(message->getComponentID()));
+        item.insert(QStringLiteral("severity"), static_cast<int>(message->getSeverity()));
+        item.insert(QStringLiteral("text"), message->getText());
+        item.insert(QStringLiteral("timestamp"), message->getTimestamp());
+        // Keep the 64-bit identifier exact when it crosses into JavaScript.
+        item.insert(QStringLiteral("id"), QString::number(message->getId()));
+        result.append(item);
+    }
+
+    return result;
+}
+
 void StatusTextHandler::clearMessages()
 {
+    const bool hadMessages = !m_messages.isEmpty();
+
     qDeleteAll(m_messages);
     m_messages.clear();
 
@@ -90,6 +117,10 @@ void StatusTextHandler::clearMessages()
     m_normalCount = 0;
 
     _handleTextMessage(0);
+
+    if (hadMessages) {
+        emit messagesChanged();
+    }
 }
 
 void StatusTextHandler::resetAllMessages()
@@ -143,7 +174,7 @@ void StatusTextHandler::handleHTMLEscapedTextMessage(MAV_COMPONENT compId, MAV_S
 
     (void) htmlText.replace("\n", "<br/>");
 
-    // TODO: handle text + description separately in the UI
+            // TODO: handle text + description separately in the UI
     if (!description.isEmpty()) {
         QString htmlDescription(description);
         (void) htmlDescription.replace("\n", "<br/>");
@@ -162,10 +193,10 @@ void StatusTextHandler::handleHTMLEscapedTextMessage(MAV_COMPONENT compId, MAV_S
 
     MessageType messageType = MessageType::MessageNone;
 
-    // Color the output depending on the message severity. We have 3 distinct cases:
-    // 1: If we have an ERROR or worse, make it bigger, bolder, and highlight it red.
-    // 2: If we have a warning or notice, just make it bold and color it orange.
-    // 3: Otherwise color it the standard color, white.
+            // Color the output depending on the message severity. We have 3 distinct cases:
+            // 1: If we have an ERROR or worse, make it bigger, bolder, and highlight it red.
+            // 2: If we have a warning or notice, just make it bold and color it orange.
+            // 3: Otherwise color it the standard color, white.
     QString style;
     switch (severity) {
         case MAV_SEVERITY_EMERGENCY:
@@ -236,7 +267,7 @@ void StatusTextHandler::handleHTMLEscapedTextMessage(MAV_COMPONENT compId, MAV_S
 
     const QString formatText = QString("<font style=\"%1\">[%2 %3] %4: %5</font><br/>").arg(style, dateString, compString, severityText, htmlText);
 
-    StatusText* const message = new StatusText(compId, severity, text);
+    StatusText* const message = new StatusText(compId, severity, text, dateString, m_nextMessageId++);
     message->setFormatedText(formatText);
 
     emit newFormattedMessage(formatText);
@@ -245,6 +276,7 @@ void StatusTextHandler::handleHTMLEscapedTextMessage(MAV_COMPONENT compId, MAV_S
     const uint32_t count = m_messages.count();
 
     _handleTextMessage(count, messageType);
+    emit messagesChanged();
 
     if (message->severityIsError()) {
         emit newErrorMessage(message->getText());
@@ -373,7 +405,7 @@ void StatusTextHandler::_handleTextMessage(uint32_t newCount, MessageType messag
         emit messageCountChanged(messageCount());
     }
 
-    // messageType represents the worst message which hasn't been viewed yet
+            // messageType represents the worst message which hasn't been viewed yet
     MessageType newMessageType = MessageType::MessageNone;
     if (getErrorCount() > 0) {
         newMessageType = MessageType::MessageError;

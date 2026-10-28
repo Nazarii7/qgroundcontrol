@@ -6,6 +6,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         LinkInterface.h
         LinkManager.cc
         LinkManager.h
+        DoodleLinkManager.cc
+        DoodleLinkManager.h
         LogReplayLink.cc
         LogReplayLink.h
         LogReplayLinkController.cc
