@@ -27,7 +27,7 @@ ColumnLayout {
     }
 
     // Reserve a predictable default dock below the upper-right Battery OSD.
-    // The actual control lives in Overlay.overlay, so layouts cannot force it
+    // The actual control lives in the common foreground, so layouts cannot force it
     // back after the operator unlocks and drags it.
     Item {
         id: photoVideoControlSlot
@@ -43,16 +43,14 @@ ColumnLayout {
 
         property real rightEdgeCenterInset: visible ? parent.width - x : 0
 
-        Popup {
+        Item {
             id: photoVideoPopup
 
-            parent: Overlay.overlay
+            parent: mainWindow.widgetPanelOverlay
             visible: DropWidgetSettings.photoVideoVisible && photoVideoControlSlot.visible
-            modal: false
-            focus: false
-            padding: 0
-            closePolicy: Popup.NoAutoClose
-            z: 2000
+            // A plain floating item shares the exact same stack as other widgets.
+            // Modal dialogs remain owned by Qt Quick Controls' higher overlay.
+            z: mainWindow.widgetPanelZ
 
             width: photoVideoControl.implicitWidth
             height: photoVideoControl.implicitHeight
@@ -87,13 +85,14 @@ ColumnLayout {
                 y = position.y
             }
 
-            onOpened: Qt.callLater(updatePosition)
-
-            background: Item {
+            onVisibleChanged: {
+                if (visible) Qt.callLater(updatePosition)
             }
+            Component.onCompleted: Qt.callLater(updatePosition)
 
-            contentItem: PhotoVideoControl {
+            PhotoVideoControl {
                 id: photoVideoControl
+                anchors.fill: parent
 
                 widgetSettings: DropWidgetSettings
 

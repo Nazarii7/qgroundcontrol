@@ -7,15 +7,16 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "../Shared/OSD" as Shared
 
 import QGroundControl.ScreenTools
 
-Rectangle {
+Shared.OSDPanelSurface {
     id: root
 
     property var vehicle: null
     property bool displayEnabled: true
-    property bool transparentBackground: false
+
 
     readonly property var gpsGroup:
         vehicle && vehicle.gps ? vehicle.gps : null
@@ -26,13 +27,12 @@ Rectangle {
     readonly property int satelliteCount:
         factInteger(gpsGroup ? gpsGroup.count : null, -1)
 
-    readonly property color accentColor: Qt.rgba(0.14, 0.82, 0.88, 1.0)
-    readonly property color goodColor: Qt.rgba(0.34, 0.90, 0.28, 1.0)
-    readonly property color warningColor: Qt.rgba(1.0, 0.76, 0.25, 1.0)
-    readonly property color badColor: Qt.rgba(1.0, 0.36, 0.32, 1.0)
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor:
-        Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property color accentColor: root.osdStyle.accentColor
+    readonly property color goodColor: root.osdStyle.gpsGoodColor
+    readonly property color warningColor: root.osdStyle.gpsWarningColor
+    readonly property color badColor: root.osdStyle.gpsBadColor
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
 
     readonly property string fixStatusText: statusTextForFix(fixType)
     readonly property color fixStatusColor: statusColorForFix(fixType)
@@ -40,16 +40,6 @@ Rectangle {
 
     width: Math.max(128, ScreenTools.defaultFontPixelWidth * 14)
     height: Math.max(58, ScreenTools.defaultFontPixelHeight * 3.35)
-    radius: 8
-    color:
-        transparentBackground
-            ? "transparent"
-            : Qt.rgba(0.08, 0.10, 0.13, 0.86)
-    border.width: 1
-    border.color:
-        transparentBackground
-            ? Qt.rgba(1, 1, 1, 0.62)
-            : Qt.rgba(1, 1, 1, 0.14)
 
     visible: displayEnabled && vehicle !== null
 
@@ -175,8 +165,8 @@ Rectangle {
 
             Text {
                 text: "GPS"
-                color: Qt.rgba(1, 1, 1, 0.90)
-                font.pixelSize: 10
+                color: root.osdStyle.labelColor
+                font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -191,7 +181,7 @@ Rectangle {
 
             text: root.fixStatusText
             color: root.fixStatusColor
-            font.pixelSize: 11
+            font.pixelSize: root.osdStyle.smallFontSize
             font.bold: true
             style: root.readabilityTextStyle
             styleColor: root.readabilityShadowColor
@@ -206,8 +196,8 @@ Rectangle {
 
             Text {
                 text: root.satelliteCount >= 0 ? String(root.satelliteCount) : "--"
-                color: Qt.rgba(1, 1, 1, 0.88)
-                font.pixelSize: 11
+                color: root.osdStyle.labelColor
+                font.pixelSize: root.osdStyle.smallFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -231,9 +221,7 @@ Rectangle {
                         anchors.bottom: parent.bottom
                         color: index < root.satelliteBars
                                ? root.fixStatusColor
-                               : (root.transparentBackground
-                                  ? Qt.rgba(1, 1, 1, 0.48)
-                                  : Qt.rgba(1, 1, 1, 0.18))
+                               : (root.osdStyle.inactiveIndicatorColor)
                     }
                 }
             }

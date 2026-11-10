@@ -21,12 +21,11 @@ ToolStrip {
     // required for this assignment.
     objectName: "pgrFlyViewToolStrip"
 
-    // PGR Camera / Drop Widget / Settings palette.
-    color: Qt.rgba(0.08, 0.10, 0.13, 0.90)
+    // The shared ToolStrip supplies the background from the active QGC palette.
     radius: 10
 
     border.width: 1
-    border.color: Qt.rgba(1.00, 1.00, 1.00, 0.16)
+    border.color: QGroundControl.globalPalette.buttonBorder
 
     signal displayPreFlightChecklist
 

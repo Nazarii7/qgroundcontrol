@@ -8,6 +8,7 @@
  ****************************************************************************/
 
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -24,41 +25,13 @@ Rectangle {
     width:  parent.width
     height: ScreenTools.toolbarHeight
 
-    // One continuous status gradient across the complete toolbar.
-    // The middle stop keeps the active status hue while darkening it before
-    // the final graphite endpoint.
-    color: _statusGradientDark
-
-    gradient: Gradient {
-        orientation: Gradient.Horizontal
-
-        GradientStop {
-            position: 0.0
-            color: _root._mainStatusBGColor
-        }
-
-        GradientStop {
-            position: 0.45
-            color: Qt.darker(
-                _root._mainStatusBGColor,
-                1.45
-            )
-        }
-
-        GradientStop {
-            position: 1.0
-            color: _root._statusGradientDark
-        }
-    }
+    // Standard QGC toolbar background follows Indoor / Outdoor.
+    color: qgcPal.toolbarBackground
 
     property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
     property bool   _communicationLost: _activeVehicle ? _activeVehicle.vehicleLinkManager.communicationLost : false
     property color  _mainStatusBGColor: qgcPal.brandingPurple
 
-    // Dark endpoint for the status gradient. It matches the PGR Camera,
-    // Drop Widget and Settings palette without changing the rest of QGC.
-    readonly property color _statusGradientDark:
-        Qt.rgba(0.08, 0.10, 0.13, 0.96)
 
     function dropMainStatusIndicatorTool() {
         mainStatusIndicator.dropMainStatusIndicator();
@@ -74,6 +47,20 @@ Rectangle {
         height:         1
         color:          "black"
         visible:        qgcPal.globalTheme === QGCPalette.Light
+        z:              1
+    }
+
+    // One continuous status gradient across the complete toolbar, as before.
+    // Its width is the same for every state and its endpoint follows the theme.
+    Rectangle {
+        id: statusColorBackground
+        anchors.fill: parent
+
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: _mainStatusBGColor }
+            GradientStop { position: 1; color: _root.color }
+        }
     }
 
     RowLayout {
@@ -86,17 +73,48 @@ Rectangle {
         QGCToolBarButton {
             id:                     currentButton
             Layout.preferredHeight: viewButtonRow.height
-            icon.source:            "/res/QGCLogoFull.svg"
+            icon.source:            "/res/PGLogo.png"
             logo:                   true
             onClicked:              mainWindow.showToolSelectDialog()
+
+            // Preserve the native content item's geometry and input behavior.
+            // Its small tinted texture is replaced visually by the image below.
+            contentItem.opacity: 0
+
+            // The image is inset into one white frame, rather than painted
+            // behind a separate outline with a different corner contour.
+            Rectangle {
+                id: logoFrame
+                parent: currentButton
+                anchors.centerIn: currentButton.contentItem
+                width: ScreenTools.defaultFontPixelHeight * 2
+                height: width
+                radius: width * 0.20
+                color: "white"
+                antialiasing: true
+                z: 1
+
+                readonly property real frameWidth: Math.max(1.5, width / 24)
+
+                Image {
+                    id: logoImage
+                    anchors.fill: parent
+                    anchors.margins: logoFrame.frameWidth
+                    source: currentButton.icon.source
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: false
+
+                    // Decode above the actual display resolution so the
+                    // raster logo is not enlarged from a small UI texture.
+                    sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio) * 2)
+                    sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio) * 2)
+                }
+            }
         }
 
         MainStatusIndicator {
             id: mainStatusIndicator
-
-            // Standard QObject marker. MainStatusIndicator uses it only to
-            // select light content over this dark toolbar background.
-            objectName: "pgrDarkToolbarStatus"
 
             Layout.preferredHeight: viewButtonRow.height
         }
@@ -121,7 +139,19 @@ Rectangle {
         contentWidth:           toolIndicators.width
         flickableDirection:     Flickable.HorizontalFlick
 
-        FlyViewToolBarIndicators { id: toolIndicators }
+        FlyViewToolBarIndicators {
+            id: toolIndicators
+
+            // Older indicator modules do not expose compactHeader. Avoid a
+            // fatal QML property assignment when only this toolbar is updated.
+            Component.onCompleted: {
+                if (toolIndicators.hasOwnProperty("compactHeader")) {
+                    toolIndicators["compactHeader"] = true
+                } else {
+                    console.info("FlyViewToolBar: compactHeader is unavailable in FlyViewToolBarIndicators.qml; using its standard layout.")
+                }
+            }
+        }
     }
 
     //-------------------------------------------------------------------------
@@ -153,7 +183,7 @@ Rectangle {
             height: width
             sourceSize.height: height
             source: "/res/gear-black.svg"
-            color: "white"
+            color: qgcPal.text
             fillMode: Image.PreserveAspectFit
             mipmap: true
 

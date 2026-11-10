@@ -19,6 +19,7 @@ import SiYi.Object 1.0
 import "DropWidget" as DropWidget
 import "ControllerInput" as ControllerInput
 import "OSD" as OSD
+import "Shared/OSD" as Shared
 
 Item {
     id: _root
@@ -39,9 +40,8 @@ Item {
     readonly property real _photoVideoControlEdgeMargin: 6
     readonly property real _topOsdMargin: _m * 0.5
     readonly property real _edgeOsdMargin: _m
-    // One shared width keeps the right-side Battery, Altitude and Horizon OSDs
-    // visually aligned. The compact factor keeps all telemetry readable while
-    // reducing the complete right-side group by another step.
+    // Battery and Horizon retain their shared width. Altitude uses a narrower
+    // telemetry card and a separate moving tape beside it.
     readonly property real _rightOsdWidth:
         Math.max(136, ScreenTools.defaultFontPixelWidth * 12)
     readonly property real _panelWidth: 220
@@ -51,7 +51,7 @@ Item {
     readonly property real _settingsRowHeight: 44
     // Interactive/movable widgets must always stay above every OSD element.
     // The OSD layer uses z: 1100 throughout this file.
-    readonly property real _interactiveWidgetZ: 2000
+    readonly property real _interactiveWidgetZ: mainWindow.widgetPanelZ
     readonly property real _topOffset: parentToolInsets ? parentToolInsets.topEdgeRightInset + _m : _m
     readonly property real _controllerTopOffset:
         parentToolInsets ? parentToolInsets.topEdgeRightInset + _m : _m
@@ -134,18 +134,18 @@ Item {
                 id: linkOsd
 
                 displayEnabled:
-                    _videoIsMain && DropWidgetSettings.linkOsdVisible
+                    _videoIsMain && WidgetPanelSettings.linkOsdVisible
                 transparentBackground:
-                    DropWidgetSettings.hudTransparentBackground
+                    WidgetPanelSettings.hudTransparentBackground
             }
 
             OSD.GpsOSD {
                 id: gpsOsd
 
                 displayEnabled:
-                    _videoIsMain && DropWidgetSettings.gpsOsdVisible
+                    _videoIsMain && WidgetPanelSettings.gpsOsdVisible
                 transparentBackground:
-                    DropWidgetSettings.hudTransparentBackground
+                    WidgetPanelSettings.hudTransparentBackground
                 vehicle: QGroundControl.multiVehicleManager.activeVehicle
             }
         }
@@ -163,9 +163,9 @@ Item {
 
         z: 1100
         displayEnabled:
-            _videoIsMain && DropWidgetSettings.compassOsdVisible
+            _videoIsMain && WidgetPanelSettings.compassOsdVisible
         transparentBackground:
-            DropWidgetSettings.hudTransparentBackground
+            WidgetPanelSettings.hudTransparentBackground
         vehicle: QGroundControl.multiVehicleManager.activeVehicle
     }
 
@@ -181,7 +181,7 @@ Item {
         z: 1100
         displayEnabled: _videoIsMain
         transparentBackground:
-            DropWidgetSettings.hudTransparentBackground
+            WidgetPanelSettings.hudTransparentBackground
         vehicle: QGroundControl.multiVehicleManager.activeVehicle
     }
 
@@ -216,20 +216,26 @@ Item {
         anchors.rightMargin: _photoVideoControlEdgeMargin
 
         width: _rightOsdWidth
+        // Keep the centred altitude card clear while battery details expand.
+        // The details body scrolls when this vertical space is limited.
+        maximumExpandedHeight: Math.max(baseHeight,
+            (altitudeTapeOsd.visible && rightAltitudeArea.visible
+                ? _root.height / 2 - altitudeTapeOsd.panelHeight / 2 - _m
+                : artificialHorizonOsd.visible
+                    ? artificialHorizonOsd.y - _m : _root.height - _edgeOsdMargin) - y)
         z: 1100
         visible:
             _videoIsMain
-            && DropWidgetSettings.batteryOsdVisible
+            && WidgetPanelSettings.batteryOsdVisible
             && (primaryBattery !== null || secondaryBattery !== null)
         transparentBackground:
-            DropWidgetSettings.hudTransparentBackground
+            WidgetPanelSettings.hudTransparentBackground
         vehicle: QGroundControl.multiVehicleManager.activeVehicle
     }
 
-    // Fixed right-side altitude tape and compact speed panel. This OSD ignores
-    // tool insets intentionally: movable widgets may overlap it and are drawn
-    // independently. The tape pointer and telemetry panel share the centered
-    // horizontal axis of the right-side flight-view zone.
+    // The tape has its own horizontal clearance from the battery. Its height
+    // uses the collapsed battery footprint and stays stable when details open.
+    // The centre remains aligned with the Fly View reticle.
     Item {
         id: rightAltitudeArea
 
@@ -240,23 +246,30 @@ Item {
         anchors.rightMargin: _photoVideoControlEdgeMargin
         anchors.bottomMargin: _m
 
+        readonly property real crosshairY: _root.height / 2 - y
+        readonly property real clearTop: batteryOsd.visible
+            ? batteryOsd.y + batteryOsd.baseHeight + _m - y : 0
+        readonly property real clearBottom: artificialHorizonOsd.visible
+            ? artificialHorizonOsd.y - _m - y : height
+        readonly property real tapeHalfHeight: Math.max(0, Math.min(
+            crosshairY - clearTop, clearBottom - crosshairY))
+
         width: altitudeTapeOsd.width
         z: 1100
-        visible: _videoIsMain && DropWidgetSettings.altitudeOsdVisible
+        visible: _videoIsMain && WidgetPanelSettings.altitudeOsdVisible
 
         OSD.AltitudeTapeOSD {
             id: altitudeTapeOsd
 
             anchors.right: parent.right
-            // The tape pointer and the telemetry panel share the same
-            // horizontal centre line in the Fly View.
-            y: (rightAltitudeArea.height - height) / 2
+            height: rightAltitudeArea.tapeHalfHeight * 2
+            y: rightAltitudeArea.crosshairY - height / 2
 
             displayEnabled: _videoIsMain
             transparentBackground:
-                DropWidgetSettings.hudTransparentBackground
+                WidgetPanelSettings.hudTransparentBackground
             vehicle: QGroundControl.multiVehicleManager.activeVehicle
-            panelWidth: _rightOsdWidth
+            panelWidth: Math.max(100, _rightOsdWidth * 0.76)
             tapeCenterY: height / 2
         }
     }
@@ -275,7 +288,7 @@ Item {
         indicatorSize: _rightOsdWidth
         z: 1100
         displayEnabled:
-            _videoIsMain && DropWidgetSettings.horizonOsdVisible
+            _videoIsMain && WidgetPanelSettings.horizonOsdVisible
         vehicle: QGroundControl.multiVehicleManager.activeVehicle
     }
 
@@ -294,9 +307,9 @@ Item {
 
         z: 1100
         displayEnabled:
-            _videoIsMain && DropWidgetSettings.homeOsdVisible
+            _videoIsMain && WidgetPanelSettings.homeOsdVisible
         transparentBackground:
-            DropWidgetSettings.hudTransparentBackground
+            WidgetPanelSettings.hudTransparentBackground
         vehicle: QGroundControl.multiVehicleManager.activeVehicle
         orbitRadius: artificialHorizonOsd.width / 2
         orbitGap: 0
@@ -329,10 +342,11 @@ Item {
                    : 0)
         anchors.bottomMargin: _edgeOsdMargin
 
-        // Geometry only: MainWindow owns the one persistent message component.
+        // Geometry and HUD visibility; MainWindow keeps ownership of the presenter.
         height: mainWindow.vehicleMessagePresenter
                 ? mainWindow.vehicleMessagePresenter.height : 0
         z: 1100
+        visible: _videoIsMain
 
         Component.onCompleted: {
             mainWindow.vehicleMessageLayout = bottomMessageArea
@@ -479,6 +493,10 @@ Item {
     Rectangle {
         id: zoomMultiplePopup
 
+        readonly property QtObject osdStyle: Shared.OSDStyle {
+            transparentBackground: WidgetPanelSettings.hudTransparentBackground
+        }
+
         anchors.horizontalCenter: armedStateOsd.horizontalCenter
         anchors.bottom: armedStateOsd.top
         anchors.bottomMargin: _m
@@ -495,16 +513,16 @@ Item {
         height: zoomMultipleText.implicitHeight + 12
         radius: 6
 
-        color: Qt.rgba(0.10, 0.11, 0.15, 0.93)
+        color: osdStyle.backgroundColor
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.10)
+        border.color: osdStyle.borderColor
 
         Text {
             id: zoomMultipleText
 
             anchors.centerIn: parent
             text: zoomMultipleDisplayText
-            color: "white"
+            color: zoomMultiplePopup.osdStyle.primaryTextColor
             font.pixelSize: 24
             font.bold: true
         }
@@ -533,26 +551,41 @@ Item {
 
     }
 
-    ControllerInput.ControllerInputPanel {
-        id: controllerInputPanel
+    // Visual-only host: preserve the source coordinate system and visibility.
+    Item {
+        objectName: "controllerWidgetStack"
+        parent: mainWindow.widgetPanelOverlay
+        width: _root.width
+        height: _root.height
+        z: mainWindow.widgetPanelZ
+        visible: _root.visible
+        enabled: _root.enabled
+        opacity: mainWindow.widgetPanelOpacity(_root)
+        transform: Matrix4x4 {
+            matrix: mainWindow.widgetPanelTransform(_root)
+        }
 
-        anchors.fill: parent
-        z: _interactiveWidgetZ
+        ControllerInput.ControllerInputPanel {
+            id: controllerInputPanel
 
-        visible: DropWidgetSettings.controllerInputVisible
+            anchors.fill: parent
+            z: _interactiveWidgetZ
 
-        // The custom layer already starts on the same left edge as the camera
-        // controls. A zero local left margin therefore aligns both widgets.
-        margin: _m
-        leftMargin: 4
-        topOffset: _controllerTopOffset
-        defaultAboveBottomInset: true
-        // bottomEdgeLeftInset is the occupied PiP-map height supplied by Fly
-        // View. Keep one standard OSD gap between the panel and that map.
-        bottomInset:
-            parentToolInsets ? parentToolInsets.bottomEdgeLeftInset : 0
-        bottomGap: _m
-        panelWidth: 320
+            visible: WidgetPanelSettings.controllerInputVisible
+
+            // The custom layer already starts on the same left edge as the camera
+            // controls. A zero local left margin therefore aligns both widgets.
+            margin: _m
+            leftMargin: 4
+            topOffset: _controllerTopOffset
+            defaultAboveBottomInset: true
+            // bottomEdgeLeftInset is the occupied PiP-map height supplied by Fly
+            // View. Keep one standard OSD gap between the panel and that map.
+            bottomInset:
+                parentToolInsets ? parentToolInsets.bottomEdgeLeftInset : 0
+            bottomGap: _m
+            panelWidth: 320
+        }
     }
 
     DropWidget.DropWidgetController {
@@ -571,111 +604,126 @@ Item {
         }
     }
 
-    DropWidget.DropControlPanel {
-        id: dropControlPanel
-
-        anchors.fill: parent
-        z: _interactiveWidgetZ
-
-        visible: DropWidgetSettings.dropWidgetVisible
-        enabled: visible
-
-        dropModel: dropWidgetController.dropModel
-        paletteObject: qgcPal
-        dropTitleProvider: dropWidgetController.dropTitleForServo
-
-        panelWidth: _panelWidth
-        margin: _m
-        topOffset: _topOffset
-        headerHeight: _headerHeight
-        rowHeight: _rowHeight
-        rowAnimatedHeight: _rowAnimatedHeight
-        settingsRowHeight: _settingsRowHeight
-
-        savedPanelX: dropWidgetController.panelX
-        savedPanelY: dropWidgetController.panelY
-        useSavedPanelPosition: dropWidgetController.hasSavedPanelPosition
-
-        activeDropCount: dropWidgetController.activeDropCount
-        availableServoCount: dropWidgetController.availableServoCount
-        settingsOpen: dropWidgetController.settingsOpen
-        panelExpanded: dropWidgetController.panelExpanded
-        holdActive: dropWidgetController.holdActive
-
-        dropMode: dropWidgetController.dropMode
-        dropModeAll: dropWidgetController.dropModeAll
-        dropModeGroups: dropWidgetController.dropModeGroups
-        dropModeIndividual: dropWidgetController.dropModeIndividual
-
-        controlBehavior: dropWidgetController.controlBehavior
-        controlBehaviorStandard: dropWidgetController.controlBehaviorStandard
-        controlBehaviorStepAndHold: dropWidgetController.controlBehaviorStepAndHold
-        controlBehaviorSynchronizedPair: dropWidgetController.controlBehaviorSynchronizedPair
-        dropModeEditingEnabled: dropWidgetController.dropModeEditingEnabled
-        canDrop: dropWidgetController.canDrop
-        showPhysicalPositionWhenIdle: dropWidgetController.showPhysicalPositionWhenIdle
-        configurationMessage: dropWidgetController.configurationMessage
-        holdButtonIdleText: dropWidgetController.holdButtonIdleText
-        holdButtonActiveText: dropWidgetController.holdButtonActiveText
-
-        currentDropLabel: dropWidgetController.currentDropLabel
-        nextDropLabel: dropWidgetController.nextDropLabel
-        sequenceOrderedTargets: dropWidgetController.sequenceOrderedTargets
-
-        onControlBehaviorChangedFromUi: function(behavior) {
-            dropWidgetController.setControlBehavior(behavior)
+    // Visual-only host: preserve the source coordinate system and visibility.
+    Item {
+        objectName: "dropWidgetStack"
+        parent: mainWindow.widgetPanelOverlay
+        width: _root.width
+        height: _root.height
+        z: mainWindow.widgetPanelZ
+        visible: _root.visible
+        enabled: _root.enabled
+        opacity: mainWindow.widgetPanelOpacity(_root)
+        transform: Matrix4x4 {
+            matrix: mainWindow.widgetPanelTransform(_root)
         }
 
-        onDropModeChangedFromUi: function(mode) {
-            dropWidgetController.setDropMode(mode)
-        }
+        DropWidget.DropControlPanel {
+            id: dropControlPanel
 
-        onSequenceOrderMoveRequested: function(servoNumber, direction) {
-            dropWidgetController.moveServoInSequence(servoNumber, direction)
-        }
+            anchors.fill: parent
+            z: _interactiveWidgetZ
 
-        onServoClosedPwmChanged: function(rowIndex, pwmValue) {
-            dropWidgetController.setServoClosedPwm(rowIndex, pwmValue)
-        }
+            visible: DropWidgetSettings.dropWidgetVisible
+            enabled: visible
 
-        onServoOpenPositionPwmChanged: function(rowIndex, positionIndex, pwmValue) {
-            dropWidgetController.setServoOpenPositionPwm(rowIndex, positionIndex, pwmValue)
-        }
+            dropModel: dropWidgetController.dropModel
+            paletteObject: qgcPal
+            dropTitleProvider: dropWidgetController.dropTitleForServo
 
-        onServoOpenPositionAddRequested: function(rowIndex) {
-            dropWidgetController.addServoOpenPosition(rowIndex)
-        }
+            panelWidth: _panelWidth
+            margin: _m
+            topOffset: _topOffset
+            headerHeight: _headerHeight
+            rowHeight: _rowHeight
+            rowAnimatedHeight: _rowAnimatedHeight
+            settingsRowHeight: _settingsRowHeight
 
-        onServoOpenPositionRemoveRequested: function(rowIndex, positionIndex) {
-            dropWidgetController.removeServoOpenPosition(rowIndex, positionIndex)
-        }
+            savedPanelX: dropWidgetController.panelX
+            savedPanelY: dropWidgetController.panelY
+            useSavedPanelPosition: dropWidgetController.hasSavedPanelPosition
 
-        onServoPwmResetRequested: function(rowIndex) {
-            dropWidgetController.resetServoPwmPositions(rowIndex)
-        }
+            activeDropCount: dropWidgetController.activeDropCount
+            availableServoCount: dropWidgetController.availableServoCount
+            settingsOpen: dropWidgetController.settingsOpen
+            panelExpanded: dropWidgetController.panelExpanded
+            holdActive: dropWidgetController.holdActive
 
-        onSettingsOpenChangedFromUi: function(open) {
-            dropWidgetController.setSettingsOpen(open)
-        }
+            dropMode: dropWidgetController.dropMode
+            dropModeAll: dropWidgetController.dropModeAll
+            dropModeGroups: dropWidgetController.dropModeGroups
+            dropModeIndividual: dropWidgetController.dropModeIndividual
 
-        onPanelExpandedChangedFromUi: function(expanded) {
-            dropWidgetController.setPanelExpanded(expanded)
-        }
+            controlBehavior: dropWidgetController.controlBehavior
+            controlBehaviorStandard: dropWidgetController.controlBehaviorStandard
+            controlBehaviorStepAndHold: dropWidgetController.controlBehaviorStepAndHold
+            controlBehaviorSynchronizedPair: dropWidgetController.controlBehaviorSynchronizedPair
+            dropModeEditingEnabled: dropWidgetController.dropModeEditingEnabled
+            canDrop: dropWidgetController.canDrop
+            showPhysicalPositionWhenIdle: dropWidgetController.showPhysicalPositionWhenIdle
+            configurationMessage: dropWidgetController.configurationMessage
+            holdButtonIdleText: dropWidgetController.holdButtonIdleText
+            holdButtonActiveText: dropWidgetController.holdButtonActiveText
 
-        onPanelPositionChangedFromUi: function(x, y) {
-            dropWidgetController.setPanelPosition(x, y)
-        }
+            currentDropLabel: dropWidgetController.currentDropLabel
+            nextDropLabel: dropWidgetController.nextDropLabel
+            sequenceOrderedTargets: dropWidgetController.sequenceOrderedTargets
 
-        onVisibilityToggleRequested: function(rowIndex) {
-            dropWidgetController.toggleServoVisibility(rowIndex)
-        }
+            onControlBehaviorChangedFromUi: function(behavior) {
+                dropWidgetController.setControlBehavior(behavior)
+            }
 
-        onHoldPressed: {
-            dropWidgetController.holdDropPressed()
-        }
+            onDropModeChangedFromUi: function(mode) {
+                dropWidgetController.setDropMode(mode)
+            }
 
-        onHoldReleased: {
-            dropWidgetController.holdDropReleased()
+            onSequenceOrderMoveRequested: function(servoNumber, direction) {
+                dropWidgetController.moveServoInSequence(servoNumber, direction)
+            }
+
+            onServoClosedPwmChanged: function(rowIndex, pwmValue) {
+                dropWidgetController.setServoClosedPwm(rowIndex, pwmValue)
+            }
+
+            onServoOpenPositionPwmChanged: function(rowIndex, positionIndex, pwmValue) {
+                dropWidgetController.setServoOpenPositionPwm(rowIndex, positionIndex, pwmValue)
+            }
+
+            onServoOpenPositionAddRequested: function(rowIndex) {
+                dropWidgetController.addServoOpenPosition(rowIndex)
+            }
+
+            onServoOpenPositionRemoveRequested: function(rowIndex, positionIndex) {
+                dropWidgetController.removeServoOpenPosition(rowIndex, positionIndex)
+            }
+
+            onServoPwmResetRequested: function(rowIndex) {
+                dropWidgetController.resetServoPwmPositions(rowIndex)
+            }
+
+            onSettingsOpenChangedFromUi: function(open) {
+                dropWidgetController.setSettingsOpen(open)
+            }
+
+            onPanelExpandedChangedFromUi: function(expanded) {
+                dropWidgetController.setPanelExpanded(expanded)
+            }
+
+            onPanelPositionChangedFromUi: function(x, y) {
+                dropWidgetController.setPanelPosition(x, y)
+            }
+
+            onVisibilityToggleRequested: function(rowIndex) {
+                dropWidgetController.toggleServoVisibility(rowIndex)
+            }
+
+            onHoldPressed: {
+                dropWidgetController.holdDropPressed()
+            }
+
+            onHoldReleased: {
+                dropWidgetController.holdDropReleased()
+            }
         }
     }
 }

@@ -36,40 +36,13 @@ Button {
     property real imageScale:        forceImageScale11 && (text == "") ? 0.8 : 0.6
     property real contentMargins:    innerText.height * 0.1
 
-    readonly property bool _pgrFlyViewStyle:
-        control.objectName === "pgrFlyViewToolStripButton"
+    property color _currentContentColor: (checked || pressed)
+        ? qgcPal.buttonHighlightText
+        : qgcPal.buttonText
 
-    property color _currentContentColor: {
-        if (_pgrFlyViewStyle) {
-            if (!control.enabled) {
-                return Qt.rgba(1.00, 1.00, 1.00, 0.42)
-            }
-
-            return (checked || pressed)
-                ? Qt.rgba(1.00, 1.00, 1.00, 1.00)
-                : Qt.rgba(1.00, 1.00, 1.00, 0.96)
-        }
-
-        return (checked || pressed)
-            ? qgcPal.buttonHighlightText
-            : qgcPal.buttonText
-    }
-
-    property color _currentContentColorSecondary: {
-        if (_pgrFlyViewStyle) {
-            if (!control.enabled) {
-                return Qt.rgba(1.00, 1.00, 1.00, 0.42)
-            }
-
-            return (checked || pressed)
-                ? Qt.rgba(1.00, 1.00, 1.00, 1.00)
-                : Qt.rgba(1.00, 1.00, 1.00, 0.72)
-        }
-
-        return (checked || pressed)
-            ? qgcPal.buttonText
-            : qgcPal.buttonHighlight
-    }
+    property color _currentContentColorSecondary: (checked || pressed)
+        ? qgcPal.buttonText
+        : qgcPal.buttonHighlight
 
     signal dropped(int index)
 
@@ -164,24 +137,10 @@ Button {
 
         anchors.fill: parent
 
-        color: {
-            if (control._pgrFlyViewStyle) {
-                if (control.checked || control.pressed) {
-                    return Qt.rgba(1.00, 1.00, 1.00, 0.18)
-                }
-
-                if (control.enabled && control.hovered) {
-                    return Qt.rgba(1.00, 1.00, 1.00, 0.10)
-                }
-
-                return "transparent"
-            }
-
-            return (control.checked || control.pressed)
-                ? qgcPal.buttonHighlight
-                : ((control.enabled && control.hovered)
-                   ? qgcPal.toolStripHoverColor
-                   : qgcPal.toolbarBackground)
-        }
+        color: (control.checked || control.pressed)
+            ? qgcPal.buttonHighlight
+            : ((control.enabled && control.hovered)
+               ? qgcPal.toolStripHoverColor
+               : qgcPal.toolbarBackground)
     }
 }

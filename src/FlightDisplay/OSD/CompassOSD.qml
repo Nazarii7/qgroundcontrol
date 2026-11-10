@@ -6,40 +6,30 @@
  ****************************************************************************/
 
 import QtQuick
+import "../Shared/OSD" as Shared
 
 import QGroundControl.ScreenTools
 
-Rectangle {
+Shared.OSDPanelSurface {
     id: root
 
     property var vehicle: null
     property bool displayEnabled: true
-    property bool transparentBackground: false
+
 
     readonly property real heading: headingNumber()
     readonly property bool headingValid:
         isFinite(heading) && !isNaN(heading) && heading >= 0
 
-    readonly property color accentColor: Qt.rgba(0.14, 0.82, 0.88, 1.0)
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor:
-        Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property color accentColor: root.osdStyle.accentColor
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
     readonly property real pixelsPerDegree: tape.width / 180.0
     readonly property real baseTickAngle:
         headingValid ? Math.floor(heading / 10.0) * 10.0 : 0
 
     width: Math.max(360, ScreenTools.defaultFontPixelWidth * 42)
     height: Math.max(58, ScreenTools.defaultFontPixelHeight * 3.35)
-    radius: 8
-    color:
-        transparentBackground
-            ? "transparent"
-            : Qt.rgba(0.08, 0.10, 0.13, 0.86)
-    border.width: 1
-    border.color:
-        transparentBackground
-            ? Qt.rgba(1, 1, 1, 0.62)
-            : Qt.rgba(1, 1, 1, 0.14)
     clip: true
 
     visible: displayEnabled && vehicle !== null && headingValid
@@ -134,8 +124,8 @@ Rectangle {
                     visible: text.length > 0
                     color: tickItem.highlightedCardinal
                            ? root.accentColor
-                           : Qt.rgba(1, 1, 1, 0.88)
-                    font.pixelSize: 11
+                           : root.osdStyle.labelColor
+                    font.pixelSize: root.osdStyle.smallFontSize
                     font.bold: tickItem.highlightedCardinal
                     style: root.readabilityTextStyle
                     styleColor: root.readabilityShadowColor
@@ -150,7 +140,7 @@ Rectangle {
 
                     width: 2
                     height: tickItem.majorTick ? 10 : 6
-                    color: Qt.rgba(0.0, 0.0, 0.0, 0.68)
+                    color: root.osdStyle.tickShadowColor
                 }
 
                 Rectangle {
@@ -161,12 +151,8 @@ Rectangle {
                     width: 1
                     height: tickItem.majorTick ? 9 : 5
                     color: tickItem.majorTick
-                           ? (root.transparentBackground
-                              ? Qt.rgba(1, 1, 1, 1.0)
-                              : Qt.rgba(1, 1, 1, 0.78))
-                           : (root.transparentBackground
-                              ? Qt.rgba(1, 1, 1, 0.72)
-                              : Qt.rgba(1, 1, 1, 0.42))
+                           ? (root.osdStyle.majorTickColor)
+                           : (root.osdStyle.minorTickColor)
                 }
             }
         }
@@ -179,8 +165,8 @@ Rectangle {
         anchors.topMargin: -3
 
         text: "▼"
-        color: Qt.rgba(1, 1, 1, 0.94)
-        font.pixelSize: 11
+        color: root.osdStyle.strongTextColor
+        font.pixelSize: root.osdStyle.smallFontSize
         font.bold: true
         style: root.readabilityTextStyle
         styleColor: root.readabilityShadowColor
@@ -196,7 +182,7 @@ Rectangle {
 
         text: root.headingValid ? Math.round(root.heading) + "°" : "--°"
         color: root.accentColor
-        font.pixelSize: 12
+        font.pixelSize: root.osdStyle.bodyFontSize
         font.bold: true
         style: root.readabilityTextStyle
         styleColor: root.readabilityShadowColor

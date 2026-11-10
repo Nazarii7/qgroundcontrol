@@ -2,6 +2,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import QGroundControl.FlightDisplay
+import "../Shared/Widget" as Shared
+
 import "controls"
 import "style"
 import "ui"
@@ -27,7 +30,7 @@ Item {
     property int availableServoCount: 0
     property bool settingsOpen: false
     property bool panelExpanded: true
-    property bool panelLocked: true
+    property alias panelLocked: panelState.locked
     property bool holdActive: false
 
     property int dropMode: 0
@@ -54,19 +57,30 @@ Item {
     property real savedPanelX: -1
     property real savedPanelY: -1
 
-    property real panelX: -1
-    property real panelY: -1
-
-    property bool panelPositionReady: false
-    property bool panelPositionChangedByUser: false
+    property alias panelX: panelState.panelX
+    property alias panelY: panelState.panelY
+    readonly property bool panelPositionReady: panelState.ready
+    readonly property bool panelPositionChangedByUser: panelState.manuallyPositioned
+    readonly property bool panelDragging: panelState.dragging
 
     readonly property bool hasValidSavedPanelPosition: useSavedPanelPosition && savedPanelX >= 0 && savedPanelY >= 0
 
-    property bool panelDragging: false
-    property real dragStartPointerX: 0
-    property real dragStartPointerY: 0
-    property real dragStartPanelX: 0
-    property real dragStartPanelY: 0
+    WidgetPanelController {
+        id: panelState
+
+        enabled: control.visible && control.enabled && control.width > 0 && control.height > 0
+        bounds: Qt.rect(control.margin, control.margin,
+                        Math.max(0, control.width - control.margin * 2),
+                        Math.max(0, control.height - control.margin * 2))
+        panelSize: Qt.size(control.panelWidth, control.currentPanelHeight())
+        defaultPosition: Qt.point(control.defaultPanelX(), control.defaultPanelY())
+        savedPosition: Qt.point(control.savedPanelX, control.savedPanelY)
+        useSavedPosition: control.hasValidSavedPanelPosition
+
+        onPositionCommitted: function(x, y) {
+            control.panelPositionChangedFromUi(x, y)
+        }
+    }
 
     property bool controlBehaviorSectionOpen: false
     property bool dropModeSectionOpen: false
@@ -120,63 +134,21 @@ Item {
         return control.topOffset
     }
 
+    // Compatibility entry points delegate to the shared presentation controller.
     function boundedPanelPosition(x, y) {
-        var maxX = Math.max(
-                    control.margin,
-                    control.width - control.panelWidth - control.margin
-                    )
-
-        var maxY = Math.max(
-                    control.margin,
-                    control.height - control.currentPanelHeight() - control.margin
-                    )
-
-        return {
-            "x": control.clamp(x, control.margin, maxX),
-            "y": control.clamp(y, control.margin, maxY)
-        }
+        return panelState.boundedPosition(x, y)
     }
 
     function setPanelPositionLocal(x, y) {
-        if (control.width <= 0 || control.height <= 0) {
-            return
-        }
-
-        var bounded = control.boundedPanelPosition(x, y)
-
-        control.panelX = bounded.x
-        control.panelY = bounded.y
-        control.panelPositionReady = true
+        panelState.setPosition(x, y)
     }
 
     function initializePanelPosition() {
-        if (control.width <= 0 || control.height <= 0) {
-            return
-        }
-
-        if (control.hasValidSavedPanelPosition && !control.panelPositionChangedByUser) {
-            control.setPanelPositionLocal(control.savedPanelX, control.savedPanelY)
-            return
-        }
-
-        if (!control.panelPositionReady) {
-            control.setPanelPositionLocal(control.defaultPanelX(), control.defaultPanelY())
-        }
+        panelState.initializePosition()
     }
 
     function keepPanelInBounds() {
-        if (!control.panelPositionReady || control.panelDragging || control.width <= 0 || control.height <= 0) {
-            return
-        }
-
-        var bounded = control.boundedPanelPosition(control.panelX, control.panelY)
-
-        if (bounded.x === control.panelX && bounded.y === control.panelY) {
-            return
-        }
-
-        control.panelX = bounded.x
-        control.panelY = bounded.y
+        panelState.keepInBounds()
     }
 
     function wheelDeltaToPixels(event) {
@@ -247,7 +219,7 @@ Item {
         }
     }
 
-    Rectangle {
+    Shared.WidgetPanelSurface {
         id: dropPanel
         visible: control.panelExpanded && control.panelPositionReady
         x: control.panelX
@@ -273,72 +245,14 @@ Item {
                 width: parent.width
                 height: control.headerHeight
                 radius: 10
-                color: Qt.rgba(1, 1, 1, 0.07)
+                color: style.headerBackground
                 border.width: 1
-                border.color: Qt.rgba(1, 1, 1, 0.10)
+                border.color: style.cardBorder
 
-                MouseArea {
-                    id: dragArea
+                Shared.WidgetPanelDragArea {
                     anchors.fill: parent
-                    enabled: !control.panelLocked
-                    acceptedButtons: Qt.LeftButton
-                    hoverEnabled: true
-                    cursorShape: !control.panelLocked ? Qt.SizeAllCursor : Qt.ArrowCursor
-                    preventStealing: true
-
-                    function pointerInControl(mouse) {
-                        return mapToItem(control, mouse.x, mouse.y)
-                    }
-
-                    function applyPanelPosition(pointerPoint) {
-                        var nextX = control.dragStartPanelX + pointerPoint.x - control.dragStartPointerX
-                        var nextY = control.dragStartPanelY + pointerPoint.y - control.dragStartPointerY
-
-                        var bounded = control.boundedPanelPosition(nextX, nextY)
-
-                        control.panelX = bounded.x
-                        control.panelY = bounded.y
-                        control.panelPositionReady = true
-                    }
-
-                    onPressed: function(mouse) {
-                        var pointerPoint = pointerInControl(mouse)
-
-                        control.panelDragging = true
-                        control.dragStartPointerX = pointerPoint.x
-                        control.dragStartPointerY = pointerPoint.y
-                        control.dragStartPanelX = control.panelX
-                        control.dragStartPanelY = control.panelY
-
-                        mouse.accepted = true
-                    }
-
-                    onPositionChanged: function(mouse) {
-                        if (!pressed || !control.panelDragging) {
-                            return
-                        }
-
-                        applyPanelPosition(pointerInControl(mouse))
-                        mouse.accepted = true
-                    }
-
-                    onReleased: function(mouse) {
-                        if (control.panelDragging) {
-                            applyPanelPosition(pointerInControl(mouse))
-                        }
-
-                        control.panelDragging = false
-                        control.panelPositionChangedByUser = true
-                        control.panelPositionChangedFromUi(control.panelX, control.panelY)
-
-                        mouse.accepted = true
-                    }
-
-                    onCanceled: {
-                        control.panelDragging = false
-                        control.panelPositionChangedByUser = true
-                        control.panelPositionChangedFromUi(control.panelX, control.panelY)
-                    }
+                    panelController: panelState
+                    coordinateItem: control
                 }
 
                 RowLayout {
@@ -354,7 +268,7 @@ Item {
 
                         Label {
                             text: "Drops"
-                            color: "white"
+                            color: style.textPrimary
                             font.pixelSize: 15
                             font.bold: true
                             elide: Text.ElideRight
@@ -365,67 +279,25 @@ Item {
                             text: control.activeDropCount > 0
                                   ? (control.activeDropCount + " selected")
                                   : "No selected channels"
-                            color: Qt.rgba(1, 1, 1, 0.62)
+                            color: style.textSecondary
                             font.pixelSize: 10
                             elide: Text.ElideRight
                             width: parent.width
                         }
                     }
 
-                    DropIconButton {
-                        Layout.preferredWidth: 34
-                        Layout.preferredHeight: 28
+                    Shared.WidgetPanelActions {
+                        panelController: panelState
+                        coordinateItem: control
+                        locked: control.panelLocked
+                        settingsVisible: true
+                        settingsOpen: control.settingsOpen
 
-                        text: control.panelLocked ? "🔒" : "🔓"
-                        textSize: 14
-
-                        idleColor: style.buttonIdle
-                        activeColor: style.buttonActive
-                        pressedColor: style.buttonPressed
-                        borderColor: style.buttonBorder
-                        textColor: style.textPrimary
-
-                        onClicked: {
-                            control.panelLocked = !control.panelLocked
-                        }
+                        onLockToggleRequested: control.panelLocked = !control.panelLocked
+                        onSettingsToggleRequested: control.settingsOpenChangedFromUi(!control.settingsOpen)
+                        onCollapseRequested: control.panelExpandedChangedFromUi(false)
                     }
 
-                    DropIconButton {
-                        Layout.preferredWidth: 34
-                        Layout.preferredHeight: 28
-
-                        text: "\u2699"
-                        textSize: 16
-                        active: control.settingsOpen
-
-                        idleColor: style.buttonIdle
-                        activeColor: style.buttonActive
-                        pressedColor: style.buttonPressed
-                        borderColor: control.settingsOpen ? Qt.rgba(1, 1, 1, 0.28) : style.buttonBorder
-                        textColor: control.settingsOpen ? style.textPrimary : Qt.rgba(1, 1, 1, 0.85)
-
-                        onClicked: {
-                            control.settingsOpenChangedFromUi(!control.settingsOpen)
-                        }
-                    }
-
-                    DropIconButton {
-                        Layout.preferredWidth: 34
-                        Layout.preferredHeight: 28
-
-                        text: "−"
-                        textSize: 16
-
-                        idleColor: style.buttonIdle
-                        activeColor: style.buttonActive
-                        pressedColor: style.buttonPressed
-                        borderColor: style.buttonBorder
-                        textColor: style.textPrimary
-
-                        onClicked: {
-                            control.panelExpandedChangedFromUi(false)
-                        }
-                    }
                 }
             }
 
@@ -439,9 +311,9 @@ Item {
                     width: parent.width
                     height: control.settingsPopupHeight
                     radius: 9
-                    color: Qt.rgba(1, 1, 1, 0.06)
+                    color: style.cardBackground
                     border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.10)
+                    border.color: style.cardBorder
                     opacity: control.settingsOpen ? 1.0 : 0.0
                     clip: true
                     visible: height > 0 || opacity > 0
@@ -487,7 +359,7 @@ Item {
                                     Label {
                                         Layout.fillWidth: true
                                         text: "Control behavior"
-                                        color: "white"
+                                        color: style.textPrimary
                                         font.pixelSize: 12
                                         font.bold: true
                                         elide: Text.ElideRight
@@ -500,7 +372,7 @@ Item {
                                         Label {
                                             anchors.centerIn: parent
                                             text: control.controlBehaviorSectionOpen ? "−" : "+"
-                                            color: "white"
+                                            color: style.textPrimary
                                             font.pixelSize: 18
                                             font.bold: true
                                         }
@@ -534,18 +406,18 @@ Item {
                                             height: 30
                                             radius: 8
                                             color: control.controlBehavior === modelData.value
-                                                   ? Qt.rgba(0.20, 0.55, 0.24, 0.95)
-                                                   : Qt.rgba(1, 1, 1, 0.08)
+                                                   ? style.successBackground
+                                                   : style.buttonIdle
                                             border.width: 1
                                             border.color: control.controlBehavior === modelData.value
-                                                          ? Qt.rgba(0.70, 1.0, 0.72, 0.90)
-                                                          : Qt.rgba(1, 1, 1, 0.16)
+                                                          ? style.successBorder
+                                                          : style.buttonBorder
                                             opacity: control.holdActive ? 0.45 : 1.0
 
                                             Label {
                                                 anchors.centerIn: parent
                                                 text: modelData.label
-                                                color: "white"
+                                                color: style.textPrimary
                                                 font.pixelSize: 10
                                                 font.bold: control.controlBehavior === modelData.value
                                             }
@@ -567,8 +439,8 @@ Item {
                                         width: parent.width
                                         text: control.configurationMessage
                                         color: control.canDrop
-                                               ? Qt.rgba(0.65, 1.0, 0.70, 0.86)
-                                               : Qt.rgba(1.0, 0.76, 0.36, 0.92)
+                                               ? style.successText
+                                               : style.warningText
                                         font.pixelSize: 9
                                         wrapMode: Text.WordWrap
                                     }
@@ -665,8 +537,8 @@ Item {
                     visible: control.activeDropCount > 0 && control.controlBehavior !== control.controlBehaviorStandard
                     text: control.configurationMessage
                     color: control.canDrop
-                           ? Qt.rgba(0.65, 1.0, 0.70, 0.86)
-                           : Qt.rgba(1.0, 0.76, 0.36, 0.92)
+                           ? style.successText
+                           : style.warningText
                     font.pixelSize: 9
                     wrapMode: Text.WordWrap
                 }
@@ -752,7 +624,7 @@ Item {
         control.keepPanelInBounds()
     }
 
-    DropCollapsedHandle {
+    Shared.WidgetCollapsedHandle {
         visible: !control.panelExpanded && control.panelPositionReady
 
         x: control.panelX + (control.panelWidth - control.collapsedWidth)
@@ -760,6 +632,8 @@ Item {
 
         collapsedWidth: control.collapsedWidth
         collapsedPanelHeight: control.collapsedPanelHeight
+        panelController: panelState
+        coordinateItem: control
 
         onExpandRequested: {
             control.panelExpandedChangedFromUi(true)

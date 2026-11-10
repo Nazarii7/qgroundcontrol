@@ -25,6 +25,7 @@ RowLayout {
     spacing:    0
 
     property bool   showIndicator:          true
+    property bool   compactHeader:          false
     property var    expandedPageComponent
     property bool   waitForParameters:      false
 
@@ -38,15 +39,30 @@ RowLayout {
 
         QGCColoredImage {
             id:         flightModeIcon
-            width:      ScreenTools.defaultFontPixelWidth * 3
-            height:     ScreenTools.defaultFontPixelHeight
+            width:      control.compactHeader ? control.height : ScreenTools.defaultFontPixelWidth * 3
+            height:     control.compactHeader ? control.height : ScreenTools.defaultFontPixelHeight
+            Layout.preferredWidth: control.compactHeader ? control.height : ScreenTools.defaultFontPixelWidth * 3
+            Layout.preferredHeight: control.compactHeader ? control.height : ScreenTools.defaultFontPixelHeight
             fillMode:   Image.PreserveAspectFit
             mipmap:     true
             color:      qgcPal.text
             source:     "/qmlimages/FlightModesComponentIcon.png"
+
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Flight modes")
+            Accessible.ignored: !control.compactHeader
+            Accessible.onPressAction: mainWindow.showIndicatorDrawer(drawerComponent, control)
+
+            MouseArea {
+                anchors.fill: parent
+                enabled: control.compactHeader
+                visible: enabled
+                onClicked: mainWindow.showIndicatorDrawer(drawerComponent, control)
+            }
         }
 
         QGCLabel {
+            visible:            !control.compactHeader
             text:               activeVehicle ? activeVehicle.flightMode : qsTr("N/A", "No data to display")
             font.pointSize:     fontPointSize
             Layout.alignment:   Qt.AlignCenter
@@ -86,7 +102,7 @@ RowLayout {
             property var    activeVehicle:            QGroundControl.multiVehicleManager.activeVehicle
             property var    flightModeSettings:       QGroundControl.settingsManager.flightModeSettings
             property var    hiddenFlightModesFact:    null
-            property var    hiddenFlightModesList:    [] 
+            property var    hiddenFlightModesList:    []
 
             Component.onCompleted: {
                 // Hidden flight modes are classified by firmware and vehicle class

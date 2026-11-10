@@ -22,6 +22,7 @@ import QGroundControl.Vehicle
 import QGroundControl.Controllers
 
 import "PGRCamera" as PGRCamera
+import "Shared/OSD" as Shared
 
 Item {
     id:     root
@@ -369,6 +370,52 @@ Item {
         }
     }
 
+    // Video-owned reticle. Passive graphics let camera/video gestures pass through.
+    // Hide it in the compact map PiP; the main video keeps its centre marker.
+    Item {
+        id: videoReticle
+        objectName: "videoReticle"
+        anchors.centerIn: parent
+        width: Math.max(40, Math.min(96, ScreenTools.defaultFontPixelHeight * 4.6,
+                                    root.width * 0.20, root.height * 0.24))
+        height: width
+        visible: !root.compactPipMode
+        z: 1090
+
+        Canvas {
+            anchors.fill: parent
+            antialiasing: true
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+                var context = getContext("2d")
+                context.clearRect(0, 0, width, height)
+                var inset = 2
+                var farX = width - inset
+                var farY = height - inset
+                var corner = Math.max(7, width * 0.15)
+                var cross = width * 0.16
+                var centreX = width / 2
+                var centreY = height / 2
+                context.beginPath()
+                context.moveTo(inset + corner, inset); context.lineTo(inset, inset); context.lineTo(inset, inset + corner)
+                context.moveTo(farX - corner, inset); context.lineTo(farX, inset); context.lineTo(farX, inset + corner)
+                context.moveTo(inset, farY - corner); context.lineTo(inset, farY); context.lineTo(inset + corner, farY)
+                context.moveTo(farX - corner, farY); context.lineTo(farX, farY); context.lineTo(farX, farY - corner)
+                context.moveTo(centreX - cross, centreY); context.lineTo(centreX + cross, centreY)
+                context.moveTo(centreX, centreY - cross); context.lineTo(centreX, centreY + cross)
+                context.lineJoin = "miter"
+                context.lineCap = "square"
+                context.strokeStyle = Qt.rgba(0, 0, 0, 0.65)
+                context.lineWidth = 3
+                context.stroke()
+                context.strokeStyle = Qt.rgba(1, 1, 1, 0.90)
+                context.lineWidth = 1
+                context.stroke()
+            }
+        }
+    }
+
     Image {
         id:             noVideo
         anchors.fill:   parent
@@ -379,7 +426,8 @@ Item {
         // Keep waiting readable in the upper center, below the actual compass
         // and flight-mode group. Clean video uses a simple top-edge inset.
         // The existing stream/compact-PiP visibility logic is unchanged.
-        Rectangle {
+        Shared.OSDPanelSurface {
+            transparentBackground: WidgetPanelSettings.hudTransparentBackground
             id:                 noVideoPanel
             objectName:         "noVideoPanel"
             readonly property real edgeMargin:
@@ -402,10 +450,6 @@ Item {
                                          Math.max(0, parent.width - edgeMargin * 2))
             height:             Math.max(ScreenTools.defaultFontPixelHeight * 2.2,
                                          noVideoLabel.implicitHeight + ScreenTools.defaultFontPixelHeight)
-            radius:             8
-            color:              Qt.rgba(0.08, 0.10, 0.13, 0.90)
-            border.width:       1
-            border.color:       Qt.rgba(1, 1, 1, 0.16)
             clip:               true
             visible:            !root.compactPipMode
 
@@ -418,8 +462,10 @@ Item {
                 anchors.rightMargin: ScreenTools.defaultFontPixelHeight
                 text:               QGroundControl.settingsManager.videoSettings.streamEnabled.rawValue ? qsTr("WAITING FOR VIDEO") : qsTr("VIDEO DISABLED")
                 font.bold:          true
-                color:              "white"
-                font.pixelSize:     Math.max(18, ScreenTools.defaultFontPixelHeight * 1.05)
+                color:              parent.osdStyle.primaryTextColor
+                font.pixelSize:     parent.osdStyle.waitingFontSize
+                style:              parent.osdStyle.textStyle
+                styleColor:         parent.osdStyle.textShadowColor
                 wrapMode:           Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -473,7 +519,7 @@ Item {
                 !root.compactPipMode
                 && (
                     root.directSiyiMouseControlEnabled
-                    || !DropWidgetSettings.cameraControlsVisible
+                    || !WidgetPanelSettings.cameraControlsVisible
                 )
 
             onRequestToggleFullScreen: {

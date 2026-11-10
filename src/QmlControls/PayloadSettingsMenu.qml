@@ -13,6 +13,7 @@ import QGroundControl.Controls
 import QGroundControl.Controllers
 import QGroundControl.FlightDisplay
 import QGroundControl.ScreenTools
+import QGroundControl.Palette
 
 Popup {
     id: root
@@ -109,33 +110,24 @@ Popup {
         border.color: pgrStyle.panelBorder
     }
 
+    QGCPalette { id: qgcPal; colorGroupEnabled: root.enabled }
+
     QtObject {
         id: pgrStyle
 
-        readonly property color panelBackground:
-            Qt.rgba(0.08, 0.10, 0.13, 0.97)
-
-        readonly property color panelBorder:
-            Qt.rgba(1, 1, 1, 0.16)
-
-        readonly property color buttonIdle:
-            Qt.rgba(1, 1, 1, 0.08)
-
-        readonly property color buttonHover:
-            Qt.rgba(1, 1, 1, 0.14)
-
-        readonly property color buttonActive:
-            Qt.rgba(1, 1, 1, 0.22)
-
-        readonly property color buttonPressed:
-            Qt.rgba(1, 1, 1, 0.18)
-
-        readonly property color buttonBorder:
-            Qt.rgba(1, 1, 1, 0.10)
-
-        readonly property color textPrimary: "white"
-        readonly property color textSecondary:
-            Qt.rgba(1, 1, 1, 0.62)
+        readonly property color panelBackground: qgcPal.window
+        readonly property color panelBorder: qgcPal.groupBorder
+        readonly property color headerBackground: qgcPal.windowShade
+        readonly property color buttonIdle: qgcPal.button
+        readonly property color buttonHover: qgcPal.buttonHighlight
+        readonly property color buttonActive: qgcPal.buttonHighlight
+        readonly property color buttonPressed: qgcPal.buttonHighlight
+        readonly property color buttonBorder: qgcPal.buttonBorder
+        readonly property color buttonText: qgcPal.buttonText
+        readonly property color buttonHighlightText: qgcPal.buttonHighlightText
+        readonly property color focusBorder: qgcPal.buttonHighlight
+        readonly property color textPrimary: qgcPal.text
+        readonly property color textSecondary: qgcPal.text
 
         readonly property int panelRadius: 12
         readonly property int buttonRadius: 7
@@ -179,7 +171,7 @@ Popup {
 
             color:
                 switchRow.checked
-                    ? Qt.rgba(0.00, 0.80, 0.35, 0.95)
+                    ? pgrStyle.buttonActive
                     : pgrStyle.buttonIdle
 
             border.width: 1
@@ -196,7 +188,9 @@ Popup {
                         ? parent.width - width - 3
                         : 3
 
-                color: pgrStyle.textPrimary
+                color: switchRow.checked
+                    ? pgrStyle.buttonHighlightText
+                    : pgrStyle.buttonText
 
                 Behavior on x {
                     NumberAnimation {
@@ -232,7 +226,7 @@ Popup {
                 ScreenTools.defaultFontPixelHeight * 2.5
             )
 
-            color: Qt.rgba(1, 1, 1, 0.055)
+            color: pgrStyle.headerBackground
             topLeftRadius: pgrStyle.panelRadius
             topRightRadius: pgrStyle.panelRadius
 
@@ -282,7 +276,9 @@ Popup {
                         anchors.centerIn: parent
 
                         text: qsTr("Close")
-                        color: pgrStyle.textPrimary
+                        color: closeMouseArea.pressed || closeMouseArea.containsMouse
+                            ? pgrStyle.buttonHighlightText
+                            : pgrStyle.buttonText
                         font.pixelSize: pgrStyle.buttonFontSize
                     }
 
@@ -380,7 +376,9 @@ Popup {
                         rightPadding: videoFitCombo.indicator.width + 10
 
                         text: videoFitCombo.displayText
-                        color: pgrStyle.textPrimary
+                        color: videoFitCombo.pressed
+                            ? pgrStyle.buttonHighlightText
+                            : pgrStyle.buttonText
                         font.pixelSize: pgrStyle.buttonFontSize
                         verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideRight
@@ -395,6 +393,11 @@ Popup {
                         width: 10
                         height: 6
 
+                        property color arrowColor: videoFitCombo.pressed
+                            ? pgrStyle.buttonHighlightText
+                            : pgrStyle.buttonText
+                        onArrowColorChanged: requestPaint()
+
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.reset()
@@ -403,7 +406,7 @@ Popup {
                             ctx.lineTo(width, 0)
                             ctx.lineTo(width / 2, height)
                             ctx.closePath()
-                            ctx.fillStyle = pgrStyle.textPrimary
+                            ctx.fillStyle = arrowColor
                             ctx.fill()
                         }
                     }
@@ -419,7 +422,7 @@ Popup {
                         border.width: 1
                         border.color:
                             videoFitCombo.activeFocus
-                                ? Qt.rgba(1, 1, 1, 0.36)
+                                ? pgrStyle.focusBorder
                                 : pgrStyle.buttonBorder
                     }
 
@@ -436,7 +439,9 @@ Popup {
                         contentItem: Text {
                             leftPadding: 8
                             text: modelData
-                            color: pgrStyle.textPrimary
+                            color: parent.highlighted
+                                ? pgrStyle.buttonHighlightText
+                                : pgrStyle.buttonText
                             font.pixelSize: pgrStyle.buttonFontSize
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -475,7 +480,7 @@ Popup {
                         }
 
                         background: Rectangle {
-                            color: Qt.rgba(0.08, 0.10, 0.13, 0.98)
+                            color: pgrStyle.panelBackground
                             radius: pgrStyle.buttonRadius
                             border.width: 1
                             border.color: pgrStyle.panelBorder
@@ -527,7 +532,9 @@ Popup {
                         anchors.centerIn: parent
 
                         text: root.widgetsSectionExpanded ? "−" : "+"
-                        color: pgrStyle.textPrimary
+                        color: widgetsToggleMouseArea.pressed || widgetsToggleMouseArea.containsMouse
+                            ? pgrStyle.buttonHighlightText
+                            : pgrStyle.buttonText
                         font.pixelSize: Math.max(
                             pgrStyle.buttonFontSize,
                             ScreenTools.defaultFontPixelHeight
@@ -692,7 +699,9 @@ Popup {
                         anchors.centerIn: parent
 
                         text: root.hudItemsSectionExpanded ? "−" : "+"
-                        color: pgrStyle.textPrimary
+                        color: hudItemsToggleMouseArea.pressed || hudItemsToggleMouseArea.containsMouse
+                            ? pgrStyle.buttonHighlightText
+                            : pgrStyle.buttonText
                         font.pixelSize: Math.max(
                             pgrStyle.buttonFontSize,
                             ScreenTools.defaultFontPixelHeight

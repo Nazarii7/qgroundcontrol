@@ -24,6 +24,8 @@ Item {
     anchors.top:    parent.top
     anchors.bottom: parent.bottom
 
+    property bool   compactHeader: false
+
     property var    _activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
     property bool   _rtkConnected:  QGroundControl.gpsRtk.connected.value
 

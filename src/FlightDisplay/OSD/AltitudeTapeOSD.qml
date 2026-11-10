@@ -7,20 +7,24 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "../Shared/OSD" as Shared
 
 import QGroundControl.ScreenTools
 
 Item {
     id: root
 
+    readonly property QtObject osdStyle: Shared.OSDStyle {
+        transparentBackground: root.transparentBackground
+    }
+
     property var vehicle: null
     property bool displayEnabled: true
     property bool transparentBackground: false
     property bool preferTerrainAltitude: true
-    // Exposed so the parent can give Battery, Altitude and Horizon one exact
-    // shared width.
+    // Slightly wider telemetry card; Battery and Horizon retain their widths.
     property real panelWidth:
-        Math.max(ScreenTools.defaultFontPixelWidth * 12, 136)
+        Math.max(100, ScreenTools.defaultFontPixelWidth * 9.2)
     // Vertical center shared by the tape pointer and the telemetry panel.
     // The parent places this line at the Fly View crosshair height.
     property real tapeCenterY: height / 2
@@ -76,40 +80,61 @@ Item {
     readonly property string climbRateUnits: factUnits(climbRateFact, "m/s")
     readonly property string groundSpeedUnits: factUnits(groundSpeedFact, "m/s")
 
-    readonly property color accentColor: Qt.rgba(0.14, 0.82, 0.88, 1.0)
-    readonly property color altitudeColor: Qt.rgba(1.0, 0.80, 0.0, 1.0)
-    readonly property color panelColor:
-        transparentBackground
-            ? "transparent"
-            : Qt.rgba(0.08, 0.10, 0.13, 0.90)
-    readonly property color primaryTextColor:
-        transparentBackground
-            ? Qt.rgba(1.0, 1.0, 1.0, 1.0)
-            : Qt.rgba(1.0, 1.0, 1.0, 0.96)
-    readonly property color secondaryTextColor:
-        transparentBackground
-            ? Qt.rgba(1.0, 1.0, 1.0, 0.90)
-            : Qt.rgba(1.0, 1.0, 1.0, 0.68)
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor:
-        Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property color accentColor: root.osdStyle.accentColor
+    readonly property color altitudeColor: root.osdStyle.altitudeColor
+    readonly property color panelColor: root.osdStyle.backgroundColor
+    readonly property color primaryTextColor: root.osdStyle.valueTextColor
+    readonly property color secondaryTextColor: root.osdStyle.secondaryTextColor
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
 
-    readonly property real minorStep: 5.0
-    readonly property real mediumStep: 10.0
-    readonly property real majorStep: 50.0
-    readonly property real visibleAltitudeRange: 210.0
+    readonly property string altitudeReferenceLabel:
+        terrainAltitudeValid ? qsTr("AGL") : qsTr("REL")
+
+    // A moving +/-40-unit window with a labelled mark every 10 units.
+    // Reuse delegates; only their values/positions follow live telemetry.
+    readonly property real minorStep: 1.0
+    readonly property real mediumStep: 5.0
+    readonly property real majorStep: 10.0
+    readonly property real visibleAltitudeRange: 80.0
     readonly property real pixelsPerAltitudeUnit: altitudeTape.height / visibleAltitudeRange
     readonly property real baseTickAltitude:
         altitudeValid ? Math.floor(altitudeValue / minorStep) * minorStep : 0
+    readonly property int tickRadius: Math.ceil(visibleAltitudeRange / (2 * minorStep)) + 2
+    readonly property int tickCount: tickRadius * 2 + 1
 
-    readonly property real tapeWidth:
-        Math.max(112, ScreenTools.defaultFontPixelWidth * 13.5)
-    readonly property real panelHeight:
-        Math.max(220, ScreenTools.defaultFontPixelHeight * 12.6)
-    readonly property real componentSpacing:
-        Math.max(7, ScreenTools.defaultFontPixelWidth * 0.8)
+    readonly property real compactValueFontSize: Math.max(20, Math.round(ScreenTools.defaultFontPixelHeight * 1.20))
+    readonly property real compactCaptionFontSize: Math.max(11, Math.round(ScreenTools.defaultFontPixelHeight * 0.60))
+    readonly property real compactUnitFontSize: Math.max(11, Math.round(ScreenTools.defaultFontPixelHeight * 0.60))
+    readonly property real pointerValueFontSize: Math.max(14, Math.round(ScreenTools.defaultFontPixelHeight * 0.80))
+    readonly property real compactTickFontSize: Math.max(10, Math.round(ScreenTools.defaultFontPixelHeight * 0.60))
+    readonly property real rowPadding: Math.max(5, Math.round(ScreenTools.defaultFontPixelHeight * 0.25))
+    readonly property real horizontalPadding: Math.max(6, Math.round(ScreenTools.defaultFontPixelWidth * 0.55))
+    readonly property real rowContentSpacing: 2
+    readonly property real telemetryRowHeight: Math.ceil(captionMetrics.height + valueMetrics.height
+                                                      + rowContentSpacing + rowPadding * 2 + 1)
+    readonly property real panelHeight: telemetryRowHeight * 3
+    readonly property real majorTickLength: Math.max(14, Math.round(ScreenTools.defaultFontPixelWidth * 1.5))
+    readonly property real tickLabelGap: 4
+    readonly property real tickLabelWidth: Math.max(20, Math.ceil(Math.max(
+        tickMetrics.advanceWidth(String(Math.floor((altitudeValid ? altitudeValue : 0) - visibleAltitudeRange / 2))),
+        tickMetrics.advanceWidth(String(Math.ceil((altitudeValid ? altitudeValue : 0) + visibleAltitudeRange / 2))))))
+    readonly property real spineX: tickLabelWidth + tickLabelGap + majorTickLength
+    readonly property real pointerGap: 2
+    readonly property real pointerArrowWidth: Math.max(6, Math.round(ScreenTools.defaultFontPixelHeight * 0.30))
+    readonly property real pointerWidth: Math.max(36, Math.ceil(pointerMetrics.advanceWidth(altitudeText(altitudeValue))) + 8)
+    readonly property real pointerHeight: Math.ceil(pointerMetrics.height) + 4
+    readonly property real tapeWidth: spineX + pointerGap + pointerArrowWidth + pointerGap + pointerWidth
+    // A wider gutter shifts the tape left while the card stays right-aligned.
+    readonly property real componentSpacing: Math.max(13, Math.round(ScreenTools.defaultFontPixelWidth * 1.3))
+
+    FontMetrics { id: captionMetrics; font.pixelSize: root.compactCaptionFontSize }
+    FontMetrics { id: valueMetrics; font.pixelSize: root.compactValueFontSize; font.bold: true }
+    FontMetrics { id: pointerMetrics; font.pixelSize: root.pointerValueFontSize; font.bold: true }
+    FontMetrics { id: tickMetrics; font.pixelSize: root.compactTickFontSize }
+
     width: tapeWidth + componentSpacing + panelWidth
-    height: Math.max(370, ScreenTools.defaultFontPixelHeight * 22)
+    height: Math.max(260, ScreenTools.defaultFontPixelHeight * 18)
 
     visible: displayEnabled && vehicle !== null
 
@@ -194,6 +219,7 @@ Item {
 
     Item {
         id: altitudeTape
+        objectName: "altitudeTape"
 
         anchors.left: parent.left
         y: root.tapeCenterY - height / 2
@@ -204,151 +230,114 @@ Item {
         Rectangle {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            x: Math.round(parent.width * 0.27) + 1
+            x: root.spineX + 1
             width: 2
-            color: Qt.rgba(0.0, 0.0, 0.0, 0.58)
+            color: root.osdStyle.tapeSpineShadowColor
         }
-
         Rectangle {
+            objectName: "altitudeTapeSpine"
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            x: Math.round(parent.width * 0.27)
+            x: root.spineX
             width: 1
-            color: root.transparentBackground
-                   ? Qt.rgba(1.0, 1.0, 1.0, 0.82)
-                   : Qt.rgba(1.0, 1.0, 1.0, 0.30)
+            color: root.osdStyle.tapeSpineColor
         }
 
         Repeater {
-            model: 45
+            model: root.tickCount
 
             delegate: Item {
                 id: tickItem
-
+                objectName: "altitudeTick" + index
                 required property int index
 
-                readonly property real tickAltitude:
-                    root.baseTickAltitude + (index - 22) * root.minorStep
-                readonly property real relativeAltitude:
-                    tickAltitude - root.altitudeValue
-                readonly property bool majorTick:
-                    root.isStepMultiple(tickAltitude, root.majorStep)
-                readonly property bool mediumTick:
-                    !majorTick && root.isStepMultiple(tickAltitude, root.mediumStep)
-                readonly property bool currentTick:
-                    Math.abs(relativeAltitude) < root.minorStep * 0.51
+                readonly property real tickAltitude: root.baseTickAltitude + (index - root.tickRadius) * root.minorStep
+                readonly property real relativeAltitude: tickAltitude - root.altitudeValue
+                readonly property bool majorTick: root.isStepMultiple(tickAltitude, root.majorStep)
+                readonly property bool mediumTick: !majorTick && root.isStepMultiple(tickAltitude, root.mediumStep)
+                readonly property real tickLength: majorTick ? root.majorTickLength : mediumTick ? root.majorTickLength * 0.65 : root.majorTickLength * 0.35
 
                 x: 0
-                y: root.altitudeValid
-                   ? altitudeTape.height / 2
-                     - relativeAltitude * root.pixelsPerAltitudeUnit
-                     - height / 2
-                   : -100
+                y: root.altitudeValid ? altitudeTape.height / 2 - relativeAltitude * root.pixelsPerAltitudeUnit - height / 2 : -100
                 width: altitudeTape.width
-                height: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.72)
-                visible:
-                    root.altitudeValid
-                    && y > -height
-                    && y < altitudeTape.height
+                height: Math.ceil(tickMetrics.height)
+                visible: root.altitudeValid && y + height / 2 >= 0 && y + height / 2 <= altitudeTape.height
                     && (!root.terrainAltitudeValid || tickAltitude >= 0)
+                    && (majorTick || mediumTick || root.pixelsPerAltitudeUnit >= 4)
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.verticalCenterOffset: 1
-                    x: Math.round(parent.width * 0.27) + 1
-                    width: tickItem.majorTick
-                           ? Math.max(24, parent.width * 0.24)
-                           : (tickItem.mediumTick
-                              ? Math.max(16, parent.width * 0.17)
-                              : Math.max(10, parent.width * 0.11))
-                    height: tickItem.currentTick ? 4 : 2
-                    radius: height / 2
-                    color: Qt.rgba(0.0, 0.0, 0.0, 0.68)
+                    x: root.spineX - tickItem.tickLength + 1
+                    width: tickItem.tickLength
+                    height: 2
+                    color: root.osdStyle.tickShadowColor
                 }
-
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    x: Math.round(parent.width * 0.27)
-                    width: tickItem.majorTick
-                           ? Math.max(24, parent.width * 0.24)
-                           : (tickItem.mediumTick
-                              ? Math.max(16, parent.width * 0.17)
-                              : Math.max(10, parent.width * 0.11))
-                    height: tickItem.currentTick ? 3 : 1
-                    radius: height / 2
-                    color: tickItem.currentTick
-                           ? root.accentColor
-                           : (tickItem.majorTick
-                              ? (root.transparentBackground
-                                 ? Qt.rgba(1.0, 1.0, 1.0, 1.0)
-                                 : Qt.rgba(1.0, 1.0, 1.0, 0.86))
-                              : (root.transparentBackground
-                                 ? Qt.rgba(1.0, 1.0, 1.0, 0.80)
-                                 : Qt.rgba(1.0, 1.0, 1.0, 0.55)))
+                    x: root.spineX - tickItem.tickLength
+                    width: tickItem.tickLength
+                    height: tickItem.majorTick ? 2 : 1
+                    color: tickItem.majorTick ? root.osdStyle.majorTickColor : root.osdStyle.minorTickColor
                 }
-
                 Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
+                    objectName: "altitudeTickLabel" + tickItem.index
+                    x: 0
+                    width: root.tickLabelWidth
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Math.round(parent.width * 0.57)
-                    anchors.rightMargin: 2
-
                     text: String(Math.round(tickItem.tickAltitude))
-                    visible: tickItem.majorTick
-                    color: Qt.rgba(1.0, 1.0, 1.0, 0.84)
-                    font.pixelSize: Math.max(11, ScreenTools.defaultFontPixelHeight * 0.70)
+                    visible: tickItem.majorTick && tickItem.y >= 0 && tickItem.y + tickItem.height <= altitudeTape.height
+                    color: root.osdStyle.tickLabelColor
+                    font.pixelSize: root.compactTickFontSize
                     style: root.readabilityTextStyle
                     styleColor: root.readabilityShadowColor
-                    horizontalAlignment: Text.AlignLeft
+                    horizontalAlignment: Text.AlignRight
                     verticalAlignment: Text.AlignVCenter
                 }
             }
         }
 
         Row {
-            anchors.left: parent.left
-            anchors.leftMargin: Math.round(parent.width * 0.22)
+            id: currentAltitudePointer
+            objectName: "currentAltitudePointer"
+            x: root.spineX + root.pointerGap
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 0
+            spacing: root.pointerGap
             visible: root.altitudeValid
             z: 10
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                width: Math.max(17, ScreenTools.defaultFontPixelWidth * 2.0)
+                width: root.pointerArrowWidth
+                height: root.pointerHeight
                 text: "\u25B6"
                 color: root.altitudeColor
-                font.pixelSize: Math.max(18, ScreenTools.defaultFontPixelHeight * 1.10)
+                font.pixelSize: Math.max(10, root.pointerValueFontSize * 0.7)
                 font.bold: true
+                fontSizeMode: Text.Fit
+                minimumPixelSize: 6
+                clip: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
-                horizontalAlignment: Text.AlignRight
+                horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
-
-            Rectangle {
-                width: Math.max(62, ScreenTools.defaultFontPixelWidth * 7.0)
-                height: Math.max(36, ScreenTools.defaultFontPixelHeight * 2.15)
-                radius: 5
-                color:
-                    root.transparentBackground
-                        ? "transparent"
-                        : Qt.rgba(0.08, 0.10, 0.13, 0.94)
-                border.width: 1
-                border.color:
-                    root.transparentBackground
-                        ? Qt.rgba(1.0, 1.0, 1.0, 0.62)
-                        : Qt.rgba(1.0, 1.0, 1.0, 0.12)
+            Shared.OSDPanelSurface {
+                objectName: "currentAltitudeBadge"
+                transparentBackground: root.transparentBackground
+                panelStyle: root.osdStyle
+                width: root.pointerWidth
+                height: root.pointerHeight
+                radius: Math.min(5, root.osdStyle.panelRadius)
 
                 Text {
+                    objectName: "currentAltitudeBadgeValue"
                     anchors.fill: parent
-                    anchors.leftMargin: 5
-                    anchors.rightMargin: 5
-
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
                     text: root.altitudeText(root.altitudeValue)
                     color: root.primaryTextColor
-                    font.pixelSize: Math.max(18, ScreenTools.defaultFontPixelHeight * 1.12)
+                    font.pixelSize: root.pointerValueFontSize
                     font.bold: true
                     style: root.readabilityTextStyle
                     styleColor: root.readabilityShadowColor
@@ -359,205 +348,104 @@ Item {
         }
 
         Text {
-            anchors.centerIn: parent
+            x: root.spineX + root.pointerGap
+            width: root.pointerWidth + root.pointerArrowWidth + root.pointerGap
+            anchors.verticalCenter: parent.verticalCenter
             text: "--"
             visible: !root.altitudeValid
             color: root.secondaryTextColor
-            font.pixelSize: Math.max(18, ScreenTools.defaultFontPixelHeight * 1.1)
-            font.bold: true
+            font.pixelSize: root.pointerValueFontSize
             style: root.readabilityTextStyle
             styleColor: root.readabilityShadowColor
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
     Item {
         id: telemetryPanel
-
+        objectName: "altitudeTelemetryPanel"
         anchors.right: parent.right
-        y: (root.height - root.panelHeight) / 2
+        y: root.tapeCenterY - height / 2
         width: root.panelWidth
         height: root.panelHeight
 
-        Rectangle {
-            id: telemetryPanelBackground
-
+        Shared.OSDPanelSurface {
+            objectName: "altitudeTelemetryBackground"
             anchors.fill: parent
-            radius: Math.min(9, width / 4)
-            color: root.panelColor
-            border.width: 1
-            border.color:
-                root.transparentBackground
-                    ? Qt.rgba(1.0, 1.0, 1.0, 0.62)
-                    : Qt.rgba(1.0, 1.0, 1.0, 0.18)
+            transparentBackground: root.transparentBackground
+            panelStyle: root.osdStyle
         }
 
-        ColumnLayout {
-            readonly property real horizontalMargin:
-                Math.max(9, ScreenTools.defaultFontPixelWidth * 0.95)
-            readonly property real verticalMargin:
-                Math.max(7, ScreenTools.defaultFontPixelHeight * 0.42)
-
-            x: horizontalMargin
-            y: verticalMargin
-            width: root.panelWidth - horizontalMargin * 2
-            height: root.panelHeight - verticalMargin * 2
-            spacing: 0
-
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 60
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-
-                    text: root.altitudeTitle
-                    color: root.primaryTextColor
-                    font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.64)
-                    font.bold: false
-                    style: root.readabilityTextStyle
-                    styleColor: root.readabilityShadowColor
-                    elide: Text.ElideRight
-                }
-
-                Row {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 2
-                    spacing: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.45)
+        Column {
+            anchors.fill: parent
+            Repeater {
+                model: 3
+                delegate: Item {
+                    id: telemetryRow
+                    objectName: "altitudeTelemetryRow" + index
+                    required property int index
+                    readonly property string caption: index === 0 ? root.altitudeReferenceLabel : index === 1 ? qsTr("VS") : qsTr("SPEED")
+                    readonly property string displayValue: index === 0 ? root.altitudeText(root.altitudeValue)
+                        : index === 1 ? root.rateText(root.climbRateValue) : root.speedText(root.groundSpeedValue)
+                    readonly property string units: index === 0 ? root.altitudeUnits : index === 1 ? root.climbRateUnits : root.groundSpeedUnits
+                    width: telemetryPanel.width
+                    height: root.telemetryRowHeight
 
                     Text {
-                        id: altitudeValueText
-
-                        text: root.altitudeText(root.altitudeValue)
-                        color: root.altitudeColor
-                        font.pixelSize: Math.max(26, ScreenTools.defaultFontPixelHeight * 1.55)
-                        font.bold: true
+                        objectName: "altitudeTelemetryCaption" + telemetryRow.index
+                        x: root.horizontalPadding
+                        y: root.rowPadding
+                        width: parent.width - root.horizontalPadding * 2
+                        text: telemetryRow.caption
+                        color: root.secondaryTextColor
+                        font.pixelSize: root.compactCaptionFontSize
                         style: root.readabilityTextStyle
                         styleColor: root.readabilityShadowColor
+                        elide: Text.ElideRight
+                        Accessible.name: telemetryRow.index === 0 ? root.altitudeTitle : telemetryRow.caption
                     }
+                    Item {
+                        x: root.horizontalPadding
+                        y: root.rowPadding + captionMetrics.height + root.rowContentSpacing
+                        width: parent.width - root.horizontalPadding * 2
+                        height: valueMetrics.height
 
-                    Text {
-                        anchors.baseline: altitudeValueText.baseline
-                        text: root.altitudeUnits
-                        color: root.primaryTextColor
-                        font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
-                        font.bold: true
-                        style: root.readabilityTextStyle
-                        styleColor: root.readabilityShadowColor
+                        Text {
+                            id: valueText
+                            objectName: "altitudeTelemetryValue" + telemetryRow.index
+                            anchors.left: parent.left
+                            anchors.right: unitText.left
+                            anchors.rightMargin: 3
+                            height: parent.height
+                            text: telemetryRow.displayValue
+                            color: telemetryRow.index === 0 ? root.altitudeColor : root.primaryTextColor
+                            font.pixelSize: root.compactValueFontSize
+                            font.bold: true
+                            fontSizeMode: Text.Fit
+                            minimumPixelSize: 11
+                            verticalAlignment: Text.AlignVCenter
+                            style: root.readabilityTextStyle
+                            styleColor: root.readabilityShadowColor
+                        }
+                        Text {
+                            id: unitText
+                            anchors.right: parent.right
+                            anchors.baseline: valueText.baseline
+                            text: telemetryRow.units
+                            color: root.primaryTextColor
+                            font.pixelSize: root.compactUnitFontSize
+                            font.bold: true
+                            style: root.readabilityTextStyle
+                            styleColor: root.readabilityShadowColor
+                        }
                     }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: root.transparentBackground
-                       ? Qt.rgba(1.0, 1.0, 1.0, 0.48)
-                       : Qt.rgba(1.0, 1.0, 1.0, 0.14)
-            }
-
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 60
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.topMargin: 5
-
-                    text: qsTr("VS")
-                    color: root.secondaryTextColor
-                    font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
-                    style: root.readabilityTextStyle
-                    styleColor: root.readabilityShadowColor
-                }
-
-                Row {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 2
-                    spacing: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.45)
-
-                    Text {
-                        id: climbRateValueText
-
-                        text: root.rateText(root.climbRateValue)
-                        color: root.primaryTextColor
-                        font.pixelSize: Math.max(24, ScreenTools.defaultFontPixelHeight * 1.48)
-                        font.bold: true
-                        style: root.readabilityTextStyle
-                        styleColor: root.readabilityShadowColor
-                    }
-
-                    Text {
-                        anchors.baseline: climbRateValueText.baseline
-                        text: root.climbRateUnits
-                        color: root.primaryTextColor
-                        font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
-                        font.bold: true
-                        style: root.readabilityTextStyle
-                        styleColor: root.readabilityShadowColor
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: root.transparentBackground
-                       ? Qt.rgba(1.0, 1.0, 1.0, 0.48)
-                       : Qt.rgba(1.0, 1.0, 1.0, 0.14)
-            }
-
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 60
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.topMargin: 5
-
-                    text: qsTr("SPEED (GND)")
-                    color: root.secondaryTextColor
-                    font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
-                    style: root.readabilityTextStyle
-                    styleColor: root.readabilityShadowColor
-                    elide: Text.ElideRight
-                }
-
-                Row {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 2
-                    spacing: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.45)
-
-                    Text {
-                        id: groundSpeedValueText
-
-                        text: root.speedText(root.groundSpeedValue)
-                        color: root.primaryTextColor
-                        font.pixelSize: Math.max(24, ScreenTools.defaultFontPixelHeight * 1.48)
-                        font.bold: true
-                        style: root.readabilityTextStyle
-                        styleColor: root.readabilityShadowColor
-                    }
-
-                    Text {
-                        anchors.baseline: groundSpeedValueText.baseline
-                        text: root.groundSpeedUnits
-                        color: root.primaryTextColor
-                        font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
-                        font.bold: true
-                        style: root.readabilityTextStyle
-                        styleColor: root.readabilityShadowColor
+                    Rectangle {
+                        x: root.horizontalPadding
+                        width: parent.width - root.horizontalPadding * 2
+                        anchors.bottom: parent.bottom
+                        height: 1
+                        visible: telemetryRow.index < 2
+                        color: root.osdStyle.separatorColor
                     }
                 }
             }

@@ -7,8 +7,10 @@
 
 import QtQuick
 import QtQuick.Effects
+import "../Shared/OSD" as Shared
 
 import QGroundControl
+import QGroundControl.FlightDisplay
 import QGroundControl.Controls
 import QGroundControl.FlightMap
 import QGroundControl.ScreenTools
@@ -16,8 +18,13 @@ import QGroundControl.ScreenTools
 Item {
     id: root
 
+    readonly property QtObject osdStyle: Shared.OSDStyle {
+        transparentBackground: root.transparentBackground
+    }
+
     property var vehicle: null
     property bool displayEnabled: true
+    property bool transparentBackground: WidgetPanelSettings.hudTransparentBackground
 
     property real indicatorSize:
         Math.max(136, ScreenTools.defaultFontPixelWidth * 12)
@@ -48,16 +55,16 @@ Item {
         anchors.fill: attitudeWidget
         source: attitudeWidget
 
-        brightness: 0.03
-        contrast: 0.24
-        saturation: 0.08
+        brightness: root.osdStyle.horizonBrightness
+        contrast: root.osdStyle.horizonContrast
+        saturation: root.osdStyle.horizonSaturation
 
         shadowEnabled: true
-        shadowColor: Qt.rgba(0.0, 0.0, 0.0, 1.0)
-        shadowOpacity: 0.88
-        shadowBlur: 0.28
-        shadowHorizontalOffset: 0
-        shadowVerticalOffset: 1
+        shadowColor: root.osdStyle.horizonShadowColor
+        shadowOpacity: root.osdStyle.horizonShadowOpacity
+        shadowBlur: root.osdStyle.horizonShadowBlur
+        shadowHorizontalOffset: root.osdStyle.horizonShadowHorizontalOffset
+        shadowVerticalOffset: root.osdStyle.horizonShadowVerticalOffset
     }
 
     // A dark outer edge plus a fine light inner edge keeps the circular HUD
@@ -66,8 +73,9 @@ Item {
         anchors.fill: attitudeWidget
         radius: width / 2
         color: "transparent"
-        border.width: Math.max(2, Math.round(root.indicatorSize * 0.012))
-        border.color: Qt.rgba(0.0, 0.0, 0.0, 0.94)
+        border.width: Math.max(root.osdStyle.horizonOuterEdgeMinimum,
+                              Math.round(root.indicatorSize * root.osdStyle.horizonOuterEdgeScale))
+        border.color: root.osdStyle.horizonOuterEdgeColor
         antialiasing: true
     }
 
@@ -76,8 +84,8 @@ Item {
         anchors.margins: 1
         radius: width / 2
         color: "transparent"
-        border.width: 1
-        border.color: Qt.rgba(1.0, 1.0, 1.0, 0.78)
+        border.width: root.osdStyle.borderWidth
+        border.color: root.osdStyle.borderColor
         antialiasing: true
     }
 }

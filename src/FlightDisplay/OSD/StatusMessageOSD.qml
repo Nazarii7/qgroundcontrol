@@ -8,17 +8,18 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../Shared/OSD" as Shared
 
 import QGroundControl.ScreenTools
 import QGroundControl.FlightDisplay
 
-Rectangle {
+Shared.OSDPanelSurface {
     id: root
 
     property var vehicle: null
     property bool displayEnabled: true
     // Use the same persisted switch as the other HUD elements.
-    property bool transparentBackground: DropWidgetSettings.hudTransparentBackground
+    transparentBackground: DropWidgetSettings.hudTransparentBackground
     property int displayInterval: 5000
     property int maximumDisplayCount: 2
     property int duplicateQuietInterval: 15000
@@ -28,6 +29,7 @@ Rectangle {
     property var attentionItems: []
     property int currentIndex: 0
     property bool detailsOpen: false
+    property bool bannerDismissed: false
     property bool _componentCompleted: false
     property bool _hadBackendMessages: false
     property int _localMessageSequence: 0
@@ -56,12 +58,12 @@ Rectangle {
         currentMessage ? Number(currentMessage.severity) : 6
     readonly property int attentionSeverity:
         attentionCount > 0 ? Number(attentionItems[0].severity) : 6
-    readonly property color normalColor: Qt.rgba(0.14, 0.82, 0.88, 1.0)
-    readonly property color warningColor: Qt.rgba(1.0, 0.68, 0.16, 1.0)
-    readonly property color errorColor: Qt.rgba(1.0, 0.30, 0.28, 1.0)
+    readonly property color normalColor: root.osdStyle.accentColor
+    readonly property color warningColor: root.osdStyle.warningColor
+    readonly property color errorColor: root.osdStyle.errorColor
     readonly property color severityColor: colorForSeverity(currentSeverity)
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor: Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
 
     width: {
         var preferred = Math.max(520, ScreenTools.defaultFontPixelWidth * 70)
@@ -69,14 +71,8 @@ Rectangle {
         return Math.min(preferred, Math.max(0, available))
     }
     height: contentColumn.implicitHeight + 12
-    radius: 9
-    color: transparentBackground ? "transparent" : Qt.rgba(0.08, 0.10, 0.13, 0.90)
-    border.width: 1
-    border.color: transparentBackground
-                  ? Qt.rgba(1, 1, 1, 0.62)
-                  : Qt.rgba(1, 1, 1, 0.14)
     clip: true
-    visible: displayEnabled && (vehicle !== null || hasLocalMessages)
+    visible: displayEnabled && !bannerDismissed && (vehicle !== null || hasLocalMessages)
              && (messageCount > 0 || attentionCount > 0)
 
     function colorForSeverity(severity) {
@@ -214,6 +210,9 @@ Rectangle {
             return
         }
 
+        // A newly accepted message reopens a dismissed banner. Quiet-period
+        // repeats return above and do not immediately undo the pilot's close.
+        bannerDismissed = false
         state.suppressed = false
         var previousSeverity = currentSeverity
         var hadMessages = messageCount > 0
@@ -304,7 +303,22 @@ Rectangle {
         messageItems = updated
     }
 
+    function dismissBanner() {
+        // Hide this presentation batch without clearing vehicle history or
+        // recorded alerts. Reuse the existing duplicate suppression policy.
+        bannerDismissed = true
+        switchAnimation.stop()
+        messageContent.opacity = 1
+        detailsOpen = false
+        for (var index = 0; index < messageItems.length; ++index) {
+            suppressQueueItem(messageItems[index])
+        }
+        messageItems = []
+        currentIndex = 0
+    }
+
     function resetQueue() {
+        bannerDismissed = false
         switchAnimation.stop()
         messageContent.opacity = 1
         currentIndex = 0
@@ -369,12 +383,38 @@ Rectangle {
         }
     }
 
+    ToolButton {
+        id: dismissButton
+        objectName: "statusMessageDismissButton"
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 6
+        width: Math.max(24, ScreenTools.defaultFontPixelHeight * 1.4)
+        height: width
+        focusPolicy: Qt.NoFocus
+        Accessible.name: qsTr("Dismiss message banner")
+        onClicked: root.dismissBanner()
+        contentItem: Text {
+            text: "×"
+            color: root.osdStyle.primaryTextColor
+            font.pixelSize: Math.max(18, ScreenTools.defaultFontPixelHeight)
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+        background: Rectangle {
+            radius: root.osdStyle.buttonRadius
+            color: dismissButton.down || dismissButton.hovered
+                ? root.osdStyle.buttonHoverBackground : "transparent"
+        }
+    }
+
     ColumnLayout {
         id: contentColumn
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 6
+        anchors.rightMargin: dismissButton.width + 12
         spacing: 4
 
         RowLayout {
@@ -393,7 +433,7 @@ Rectangle {
             Text {
                 text: root.severityText(root.currentSeverity)
                 color: root.severityColor
-                font.pixelSize: 11
+                font.pixelSize: root.osdStyle.smallFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -401,9 +441,9 @@ Rectangle {
             Text {
                 text: root.timestampText(root.currentMessage)
                 visible: text.length > 0
-                color: Qt.rgba(1, 1, 1, 0.65)
-                font.pixelSize: 10
-                font.family: "monospace"
+                color: root.osdStyle.metadataTextColor
+                font.pixelSize: root.osdStyle.tinyFontSize
+                font.family: root.osdStyle.timestampFontFamily
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
             }
@@ -413,8 +453,8 @@ Rectangle {
                 Layout.minimumWidth: 0
                 text: root.messageText(root.currentMessage)
                 textFormat: Text.RichText
-                color: "white"
-                font.pixelSize: 12
+                color: root.osdStyle.primaryTextColor
+                font.pixelSize: root.osdStyle.bodyFontSize
                 font.bold: root.currentSeverity <= 5
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -424,21 +464,21 @@ Rectangle {
                 elide: Text.ElideRight
             }
             Text {
-                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                style: root.osdStyle.optionalTextStyle
                 styleColor: root.readabilityShadowColor
                 text: root.currentMessage && root.currentMessage.repeatCount > 1
                       ? qsTr("Received %1").arg(root.currentMessage.repeatCount) : ""
                 visible: text.length > 0
-                color: "#d9e1ea"
-                font.pixelSize: 10
+                color: root.osdStyle.receivedTextColor
+                font.pixelSize: root.osdStyle.tinyFontSize
             }
             Text {
-                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                style: root.osdStyle.optionalTextStyle
                 styleColor: root.readabilityShadowColor
                 text: root.messageCount > 1 ? (root.currentIndex + 1) + "/" + root.messageCount : ""
                 visible: text.length > 0
-                color: Qt.rgba(1, 1, 1, 0.65)
-                font.pixelSize: 10
+                color: root.osdStyle.metadataTextColor
+                font.pixelSize: root.osdStyle.tinyFontSize
             }
         }
 
@@ -449,20 +489,20 @@ Rectangle {
             spacing: 8
 
             Text {
-                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                style: root.osdStyle.optionalTextStyle
                 styleColor: root.readabilityShadowColor
                 text: "\u26a0"
                 color: root.colorForSeverity(root.attentionSeverity)
-                font.pixelSize: 17
+                font.pixelSize: root.osdStyle.alertSymbolFontSize
             }
             Text {
-                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                style: root.osdStyle.optionalTextStyle
                 styleColor: root.readabilityShadowColor
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 text: qsTr("Recorded alerts: %1").arg(root.attentionCount)
                 color: root.colorForSeverity(root.attentionSeverity)
-                font.pixelSize: 12
+                font.pixelSize: root.osdStyle.bodyFontSize
                 font.bold: true
                 elide: Text.ElideRight
             }
@@ -473,15 +513,16 @@ Rectangle {
                 onClicked: root.detailsOpen = !root.detailsOpen
                 contentItem: Text {
                     text: parent.text
-                    color: "white"
-                    font.pixelSize: 12
+                    color: root.osdStyle.primaryTextColor
+                    font.pixelSize: root.osdStyle.bodyFontSize
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
                 background: Rectangle {
-                    radius: 5
-                    color: parent.hovered ? "#3b485a" : "#273343"
-                    border.color: "#65758a"
+                    radius: root.osdStyle.buttonRadius
+                    color: parent.hovered ? root.osdStyle.buttonHoverBackground : root.osdStyle.buttonBackground
+                    border.width: root.osdStyle.borderWidth
+                    border.color: root.osdStyle.buttonBorderColor
                 }
             }
         }
@@ -506,8 +547,8 @@ Rectangle {
                         required property var modelData
                         width: detailEntries.width
                         height: detailColumn.implicitHeight + 16
-                        radius: 5
-                        color: root.transparentBackground ? "transparent" : "#19222e"
+                        radius: root.osdStyle.buttonRadius
+                        color: root.osdStyle.detailBackgroundColor
                         border.color: root.colorForSeverity(modelData.severity)
 
                         Column {
@@ -519,35 +560,35 @@ Rectangle {
                             spacing: 4
 
                             Text {
-                                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                                style: root.osdStyle.optionalTextStyle
                                 styleColor: root.readabilityShadowColor
                                 width: parent.width
                                 text: root.severityText(modelData.severity) + " · "
                                       + qsTr("Received %1 times").arg(modelData.repeatCount)
                                 color: root.colorForSeverity(modelData.severity)
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: root.osdStyle.bodyFontSize
                                 wrapMode: Text.Wrap
                             }
                             Text {
-                                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                                style: root.osdStyle.optionalTextStyle
                                 styleColor: root.readabilityShadowColor
                                 width: parent.width
                                 text: root.messageText(modelData)
                                 textFormat: Text.RichText
-                                color: "white"
-                                font.pixelSize: 12
+                                color: root.osdStyle.primaryTextColor
+                                font.pixelSize: root.osdStyle.bodyFontSize
                                 wrapMode: Text.Wrap
                             }
                             Text {
-                                style: root.transparentBackground ? root.readabilityTextStyle : Text.Normal
+                                style: root.osdStyle.optionalTextStyle
                                 styleColor: root.readabilityShadowColor
                                 width: parent.width
                                 text: qsTr("First: %1 · Last received: %2")
                                     .arg(root.timestampText(modelData))
                                     .arg(String(modelData.lastTimestamp).substring(0, 8))
-                                color: "#b7c3d2"
-                                font.pixelSize: 10
+                                color: root.osdStyle.historyTextColor
+                                font.pixelSize: root.osdStyle.tinyFontSize
                                 wrapMode: Text.Wrap
                             }
                         }

@@ -546,8 +546,8 @@ ApplicationWindow {
     //-------------------------------------------------------------------------
     //-- Single persistent lower message area
     // The presenter belongs to MainWindow, never to the hideable Fly View HUD.
-    // Switching pages or clean-video mode changes only its layout, not its
-    // lifetime, queue, repeat counters, or renderer.
+    // Show it only with the video HUD. Switching pages or hiding the HUD
+    // preserves its lifetime, queue, repeat counters, and renderer.
     // Visual placement reference for the no-video label; no stream state.
     property var videoStatusLayout: null
     property var vehicleMessageLayout: null
@@ -607,18 +607,62 @@ ApplicationWindow {
         routeVehicleMessageToOsd(message, fromVehicleStatusText)
     }
 
+    // One shared foreground for movable widget visuals. It has no input area.
+    readonly property real widgetPanelZ: 2000
+    readonly property Item widgetPanelOverlay: interactiveWidgetOverlay
+
+    // Track both ancestor chains so moving/resizing a source view also updates
+    // its projected visuals. The source item and its persisted positions stay put.
+    function widgetPanelTransform(source) {
+        if (!source || !interactiveWidgetOverlay) return Qt.matrix4x4()
+        var chains = [source, interactiveWidgetOverlay]
+        for (var chain = 0; chain < chains.length; ++chain) {
+            for (var item = chains[chain]; item; item = item.parent) {
+                var geometry = item.x + item.y + item.width + item.height
+                             + item.scale + item.rotation + item.transformOrigin
+                if (!isFinite(geometry)) return Qt.matrix4x4()
+            }
+        }
+        var origin = source.mapToItem(interactiveWidgetOverlay, 0, 0)
+        var horizontal = source.mapToItem(interactiveWidgetOverlay, 1, 0)
+        var vertical = source.mapToItem(interactiveWidgetOverlay, 0, 1)
+        return Qt.matrix4x4(
+            horizontal.x - origin.x, vertical.x - origin.x, 0, origin.x,
+            horizontal.y - origin.y, vertical.y - origin.y, 0, origin.y,
+            0, 0, 1, 0,
+            0, 0, 0, 1)
+    }
+
+    function widgetPanelOpacity(source) {
+        var result = 1
+        for (var item = source; item && item !== mainWindow.contentItem; item = item.parent) {
+            result *= item.opacity
+        }
+        return result
+    }
+
+    Item {
+        id: interactiveWidgetOverlay
+        objectName: "interactiveWidgetOverlay"
+        parent: mainWindow.contentItem
+        anchors.fill: parent
+        z: mainWindow.widgetPanelZ
+        visible: flyView.visible && !planView.visible && !toolDrawer.visible
+        enabled: visible
+    }
+
     StatusMessageOSD {
         id: vehicleMessageOsd
         objectName: "vehicleMessageOsd"
 
         parent: mainWindow.contentItem
-        z: 10000
+        z: 1100
         // Keep the message block centered on the full viewport.
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(0, mainWindow.vehicleMessageArea.y
                     + mainWindow.vehicleMessageArea.height - height)
         maximumWidth: mainWindow.vehicleMessageArea.width
-        displayEnabled: true
+        displayEnabled: mainWindow.vehicleMessageUsesFlyLayout
         vehicle: globals.activeVehicle
 
         Component.onCompleted: Qt.callLater(mainWindow.flushPendingVehicleMessages)

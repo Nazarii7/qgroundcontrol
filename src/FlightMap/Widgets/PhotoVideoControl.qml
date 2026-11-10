@@ -23,18 +23,20 @@ import QGroundControl.FactSystem
 import QGroundControl.FactControls
 
 import SiYi.Object 1.0
+import "../../FlightDisplay/Shared/Widget" as Shared
 
-Rectangle {
+Shared.WidgetPanelSurface {
     id: root
 
     implicitWidth:  Math.max(ScreenTools.defaultFontPixelWidth * 17, 138)
-    implicitHeight: mainLayout.implicitHeight + (_margins * 2)
+    implicitHeight: expanded ? mainLayout.implicitHeight + (_margins * 2) : 52
     width:          implicitWidth
     height:         implicitHeight
 
-    color:        pgrStyle.panelBackground
+    color:        expanded ? pgrStyle.panelBackground : "transparent"
     radius:       pgrStyle.panelRadius
-    border.width: 1
+    border.width: expanded ? 1 : 0
+    surfaceInputEnabled: expanded
     border.color: pgrStyle.panelBorder
 
     // The widget must remain present over both map and video, even when
@@ -42,7 +44,7 @@ Rectangle {
     visible: true
 
     // Supplied by the FlightDisplay layer. Keeping this as a generic object
-    // avoids a reverse import from FlightMap back into FlightDisplay.
+    // keeps the settings and popup ownership in the FlightDisplay layer.
     property var widgetSettings: null
 
     // The top-right Fly View layer hosts this control inside a non-modal
@@ -54,11 +56,18 @@ Rectangle {
     readonly property bool panelLocked:
         widgetSettings ? Boolean(widgetSettings.photoVideoLocked) : true
 
-    property bool _panelDragging: false
-    property real _dragStartPointerX: 0
-    property real _dragStartPointerY: 0
-    property real _dragStartHostX: 0
-    property real _dragStartHostY: 0
+    property bool expanded: true
+    readonly property bool _panelDragging: photoPanelHost.panelController.dragging
+
+    Shared.WidgetPanelHost {
+        id: photoPanelHost
+        movementHost: root.movementHost
+        boundsItem: root.movementBounds
+        topInset: root.movementTopInset
+        locked: root.panelLocked
+        enabled: root.visible && root.enabled
+        onPositionCommitted: root.saveHostPosition()
+    }
 
     property real _margins:      Math.max(7, ScreenTools.defaultFontPixelHeight * 0.45)
     property real _smallMargins: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.5)
@@ -176,55 +185,15 @@ Rectangle {
         colorGroupEnabled: root.enabled
     }
 
-    QtObject {
+    Shared.WidgetPanelStyle {
         id: pgrStyle
-
-        readonly property color panelBackground: Qt.rgba(0.08, 0.10, 0.13, 0.90)
-        readonly property color panelBorder: Qt.rgba(1, 1, 1, 0.16)
-
-        readonly property color buttonIdle: Qt.rgba(1, 1, 1, 0.08)
-        readonly property color buttonActive: Qt.rgba(1, 1, 1, 0.22)
-        readonly property color buttonPressed: Qt.rgba(1, 1, 1, 0.18)
-        readonly property color buttonBorder: Qt.rgba(1, 1, 1, 0.10)
-
-        readonly property color textPrimary: "white"
-        readonly property color textSecondary: Qt.rgba(1, 1, 1, 0.62)
-        readonly property color textMuted: Qt.rgba(1, 1, 1, 0.45)
-
-        readonly property int panelRadius: 14
-        readonly property int buttonRadius: 7
-
-        readonly property int titleFontSize: 12
+        titleFontSize: 12
+        smallFontSize: 9
         readonly property int buttonFontSize: 10
-        readonly property int smallFontSize: 9
     }
 
     function boundedHostPosition(x, y) {
-        if (!movementBounds || !movementHost) {
-            return Qt.point(x, y)
-        }
-
-        return Qt.point(
-            Math.max(0, Math.min(movementBounds.width - movementHost.width, x)),
-            Math.max(
-                movementTopInset,
-                Math.min(movementBounds.height - movementHost.height, y)
-            )
-        )
-    }
-
-    function applyHostPosition(pointerPoint) {
-        if (!movementHost) {
-            return
-        }
-
-        var position = boundedHostPosition(
-            _dragStartHostX + pointerPoint.x - _dragStartPointerX,
-            _dragStartHostY + pointerPoint.y - _dragStartPointerY
-        )
-
-        movementHost.x = position.x
-        movementHost.y = position.y
+        return photoPanelHost.panelController.boundedPosition(x, y)
     }
 
     function saveHostPosition() {
@@ -350,12 +319,9 @@ Rectangle {
         }
     }
 
-    DeadMouseArea {
-        anchors.fill: parent
-    }
-
     ColumnLayout {
         id: mainLayout
+        visible: root.expanded
 
         anchors.fill: parent
         anchors.margins: root._margins
@@ -566,8 +532,8 @@ Rectangle {
                 color:
                     root._captureButtonEnabled
                     || root._isShootingInCurrentMode
-                        ? qgcPal.colorRed
-                        : qgcPal.colorGrey
+                        ? pgrStyle.recordingColor
+                        : pgrStyle.textSecondary
             }
 
             MouseArea {
@@ -600,7 +566,7 @@ Rectangle {
                 radius: pgrStyle.buttonRadius
                 color:
                     root._camera && root._camera.trackingEnabled
-                        ? qgcPal.colorRed
+                        ? pgrStyle.recordingColor
                         : pgrStyle.buttonIdle
                 border.width: 1
                 border.color: pgrStyle.buttonBorder
@@ -639,126 +605,26 @@ Rectangle {
             }
         }
 
-        RowLayout {
+        Shared.WidgetPanelActions {
             Layout.alignment: Qt.AlignHCenter
-            spacing: 5
-
-            Rectangle {
-                id: moveHandle
-
-                Layout.preferredWidth: 34
-                Layout.preferredHeight: 28
-                visible: !root.panelLocked
-
-                radius: pgrStyle.buttonRadius
-                color:
-                    moveHandleMouseArea.pressed
-                        ? pgrStyle.buttonPressed
-                        : pgrStyle.buttonActive
-                border.width: 1
-                border.color: pgrStyle.buttonBorder
-
-                QGCLabel {
-                    anchors.centerIn: parent
-                    text: "⋮⋮"
-                    color: pgrStyle.textPrimary
-                    font.pixelSize: 15
-                    font.bold: true
-                }
-
-                MouseArea {
-                    id: moveHandleMouseArea
-
-                    anchors.fill: parent
-                    enabled:
-                        !root.panelLocked
-                        && root.movementHost
-                        && root.movementBounds
-                    acceptedButtons: Qt.LeftButton
-                    hoverEnabled: true
-                    cursorShape: Qt.SizeAllCursor
-                    preventStealing: true
-
-                    function pointerInBounds(mouse) {
-                        return mapToItem(
-                            root.movementBounds,
-                            mouse.x,
-                            mouse.y
-                        )
-                    }
-
-                    onPressed: function(mouse) {
-                        var pointerPoint = pointerInBounds(mouse)
-                        root._panelDragging = true
-                        root._dragStartPointerX = pointerPoint.x
-                        root._dragStartPointerY = pointerPoint.y
-                        root._dragStartHostX = root.movementHost.x
-                        root._dragStartHostY = root.movementHost.y
-                        mouse.accepted = true
-                    }
-
-                    onPositionChanged: function(mouse) {
-                        if (!pressed || !root._panelDragging) {
-                            return
-                        }
-
-                        root.applyHostPosition(pointerInBounds(mouse))
-                        mouse.accepted = true
-                    }
-
-                    onReleased: function(mouse) {
-                        if (root._panelDragging) {
-                            root.applyHostPosition(pointerInBounds(mouse))
-                        }
-
-                        root._panelDragging = false
-                        root.saveHostPosition()
-                        mouse.accepted = true
-                    }
-
-                    onCanceled: {
-                        root._panelDragging = false
-                        root.saveHostPosition()
-                    }
-                }
+            panelController: photoPanelHost.panelController
+            coordinateItem: root.movementBounds
+            locked: root.panelLocked
+            lockEnabled: Boolean(root.widgetSettings)
+            onLockToggleRequested: {
+                if (root.widgetSettings) root.widgetSettings.photoVideoLocked = !root.panelLocked
             }
-
-            Rectangle {
-                Layout.preferredWidth: 34
-                Layout.preferredHeight: 28
-
-                radius: pgrStyle.buttonRadius
-                color:
-                    lockMouseArea.pressed
-                        ? pgrStyle.buttonPressed
-                        : root.panelLocked
-                          ? pgrStyle.buttonIdle
-                          : pgrStyle.buttonActive
-                border.width: 1
-                border.color: pgrStyle.buttonBorder
-
-                QGCLabel {
-                    anchors.centerIn: parent
-                    text: root.panelLocked ? "🔒" : "🔓"
-                    color: pgrStyle.textPrimary
-                    font.pixelSize: 14
-                }
-
-                MouseArea {
-                    id: lockMouseArea
-
-                    anchors.fill: parent
-                    enabled: Boolean(root.widgetSettings)
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
-                    onClicked: {
-                        root.widgetSettings.photoVideoLocked =
-                            !root.panelLocked
-                    }
-                }
-            }
+            onCollapseRequested: root.expanded = false
         }
+    }
+
+    Shared.WidgetCollapsedHandle {
+        visible: !root.expanded
+        x: root.width - width
+        y: 0
+        panelController: photoPanelHost.panelController
+        coordinateItem: root.movementBounds
+        onExpandRequested: root.expanded = true
     }
 
 }

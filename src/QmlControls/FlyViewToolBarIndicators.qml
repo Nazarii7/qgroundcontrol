@@ -25,6 +25,16 @@ Row {
     property var  _activeVehicle:           QGroundControl.multiVehicleManager.activeVehicle
     property real _toolIndicatorMargins:    ScreenTools.defaultFontPixelHeight * 0.66
 
+    property bool compactHeader: false
+
+    function configureIndicator(indicator) {
+        if (indicator && indicator.hasOwnProperty("compactHeader")) {
+            indicator.compactHeader = Qt.binding(function() {
+                return indicatorRow.compactHeader
+            })
+        }
+    }
+
     Repeater {
         id:     appRepeater
         model:  QGroundControl.corePlugin.toolBarIndicators
@@ -33,6 +43,7 @@ Row {
             anchors.bottom:     parent.bottom
             source:             modelData
             visible:            item.showIndicator
+            onLoaded:           indicatorRow.configureIndicator(item)
         }
     }
 
@@ -45,6 +56,7 @@ Row {
             anchors.bottom:     parent.bottom
             source:             modelData
             visible:            item.showIndicator
+            onLoaded:           indicatorRow.configureIndicator(item)
         }
     }
 
@@ -55,6 +67,7 @@ Row {
             anchors.bottom:     parent.bottom
             source:             modelData
             visible:            item.showIndicator
+            onLoaded:           indicatorRow.configureIndicator(item)
         }
     }
 }

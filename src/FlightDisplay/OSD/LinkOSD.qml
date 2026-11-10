@@ -7,35 +7,25 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "../Shared/OSD" as Shared
 
 import QGroundControl.ScreenTools
 import QGroundControl.DoodleLink 1.0
 
-Rectangle {
+Shared.OSDPanelSurface {
     id: root
 
     property bool displayEnabled: true
-    property bool transparentBackground: false
 
-    readonly property color accentColor: Qt.rgba(0.14, 0.82, 0.88, 1.0)
+
+    readonly property color accentColor: root.osdStyle.accentColor
     readonly property var antennaRssi: DoodleLinkManager.antennaRssi
     readonly property real frequencyMHz: Number(DoodleLinkManager.frequencyMHz)
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor:
-        Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
 
     width: Math.max(164, ScreenTools.defaultFontPixelWidth * 18)
     height: Math.max(58, ScreenTools.defaultFontPixelHeight * 3.35)
-    radius: 8
-    color:
-        transparentBackground
-            ? "transparent"
-            : Qt.rgba(0.08, 0.10, 0.13, 0.86)
-    border.width: 1
-    border.color:
-        transparentBackground
-            ? Qt.rgba(1, 1, 1, 0.62)
-            : Qt.rgba(1, 1, 1, 0.14)
 
     visible: displayEnabled
 
@@ -83,15 +73,13 @@ Rectangle {
                 radius: width / 2
                 color: DoodleLinkManager.valid
                        ? root.accentColor
-                       : (root.transparentBackground
-                          ? Qt.rgba(1, 1, 1, 0.58)
-                          : Qt.rgba(1, 1, 1, 0.28))
+                       : (root.osdStyle.inactiveLinkColor)
             }
 
             Text {
                 text: "LINK"
-                color: Qt.rgba(1, 1, 1, 0.90)
-                font.pixelSize: 10
+                color: root.osdStyle.labelColor
+                font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -102,8 +90,8 @@ Rectangle {
             Text {
                 Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 text: root.frequencyText()
-                color: Qt.rgba(1, 1, 1, 0.90)
-                font.pixelSize: 10
+                color: root.osdStyle.labelColor
+                font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -118,8 +106,8 @@ Rectangle {
 
             Text {
                 text: "A1"
-                color: Qt.rgba(1, 1, 1, 0.62)
-                font.pixelSize: 10
+                color: root.osdStyle.mutedTextColor
+                font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -127,8 +115,8 @@ Rectangle {
 
             Text {
                 text: root.antennaText(0)
-                color: "white"
-                font.pixelSize: 12
+                color: root.osdStyle.primaryTextColor
+                font.pixelSize: root.osdStyle.bodyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -138,8 +126,8 @@ Rectangle {
 
             Text {
                 text: "A2"
-                color: Qt.rgba(1, 1, 1, 0.62)
-                font.pixelSize: 10
+                color: root.osdStyle.mutedTextColor
+                font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
@@ -147,8 +135,8 @@ Rectangle {
 
             Text {
                 text: root.antennaText(1)
-                color: "white"
-                font.pixelSize: 12
+                color: root.osdStyle.primaryTextColor
+                font.pixelSize: root.osdStyle.bodyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor

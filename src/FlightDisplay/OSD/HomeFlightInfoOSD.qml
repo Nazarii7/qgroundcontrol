@@ -7,6 +7,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "../Shared/OSD" as Shared
 
 import QGroundControl
 import QGroundControl.Controls
@@ -15,15 +16,18 @@ import QGroundControl.ScreenTools
 Item {
     id: root
 
+    readonly property QtObject osdStyle: Shared.OSDStyle {
+        transparentBackground: root.transparentBackground
+    }
+
     property var vehicle: null
     property bool displayEnabled: true
     property bool transparentBackground: false
     property real orbitRadius: Math.max(1, height / 2)
     property real orbitGap: Math.max(4, ScreenTools.defaultFontPixelWidth * 0.6)
 
-    readonly property int readabilityTextStyle: Text.Raised
-    readonly property color readabilityShadowColor:
-        Qt.rgba(0.0, 0.0, 0.0, 0.96)
+    readonly property int readabilityTextStyle: root.osdStyle.textStyle
+    readonly property color readabilityShadowColor: root.osdStyle.textShadowColor
 
     readonly property var distanceToHomeFact:
         vehicle && vehicle.factExists("distanceToHome")
@@ -69,14 +73,8 @@ Item {
                     arcRadius * arcRadius - orbitRadius * orbitRadius
                 )
             )
-    readonly property color panelColor:
-        transparentBackground
-            ? "transparent"
-            : Qt.rgba(0.08, 0.10, 0.13, 0.90)
-    readonly property color panelBorderColor:
-        transparentBackground
-            ? Qt.rgba(1.0, 1.0, 1.0, 0.62)
-            : Qt.rgba(1.0, 1.0, 1.0, 0.16)
+    readonly property color panelColor: root.osdStyle.backgroundColor
+    readonly property color panelBorderColor: root.osdStyle.borderColor
 
     // Keep the Home block exactly as high as StatusMessageOSD so both bottom
     // OSD elements form one visual row beside the artificial horizon.
@@ -96,6 +94,11 @@ Item {
 
         property color backgroundColor: root.panelColor
         property color outlineColor: root.panelBorderColor
+
+        property real outlineWidth: root.osdStyle.borderWidth
+        property real cornerRadius: root.osdStyle.panelRadius
+        onOutlineWidthChanged: requestPaint()
+        onCornerRadiusChanged: requestPaint()
 
         onBackgroundColorChanged: requestPaint()
         onOutlineColorChanged: requestPaint()
@@ -119,7 +122,7 @@ Item {
             var bottomX = circleCenterX + bottomDeltaX
             var startAngle = Math.atan2(topDeltaY, topDeltaX)
             var endAngle = Math.atan2(bottomDeltaY, bottomDeltaX)
-            var cornerRadius = Math.min(9, panelHeight / 4)
+            var cornerRadius = Math.min(panelBackground.cornerRadius, panelHeight / 4)
 
             context.clearRect(0, 0, width, height)
             context.beginPath()
@@ -140,7 +143,7 @@ Item {
             context.closePath()
             context.fillStyle = backgroundColor
             context.fill()
-            context.lineWidth = 1
+            context.lineWidth = panelBackground.outlineWidth
             context.lineJoin = "round"
             context.strokeStyle = outlineColor
             context.stroke()
@@ -163,8 +166,8 @@ Item {
             QGCLabel {
                 Layout.fillWidth: true
                 text: qsTr("HOME")
-                color: Qt.rgba(1.0, 1.0, 1.0, 0.72)
-                font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.60)
+                color: root.osdStyle.softTextColor
+                font.pixelSize: root.osdStyle.captionFontSize
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
             }
@@ -176,9 +179,9 @@ Item {
 
                 QGCLabel {
                     text: root.distanceToHomeText
-                    color: "white"
+                    color: root.osdStyle.primaryTextColor
                     font.bold: true
-                    font.pixelSize: Math.max(17, ScreenTools.defaultFontPixelHeight * 1.05)
+                    font.pixelSize: root.osdStyle.homeValueFontSize
                     style: root.readabilityTextStyle
                     styleColor: root.readabilityShadowColor
                 }
@@ -187,9 +190,9 @@ Item {
                     Layout.alignment: Qt.AlignBottom
                     Layout.bottomMargin: 1
                     text: root.distanceToHomeUnits
-                    color: "white"
+                    color: root.osdStyle.primaryTextColor
                     font.bold: true
-                    font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.62)
+                    font.pixelSize: root.osdStyle.unitFontSize
                     style: root.readabilityTextStyle
                     styleColor: root.readabilityShadowColor
                     visible: text.length > 0
@@ -202,9 +205,7 @@ Item {
             Layout.topMargin: 1
             Layout.bottomMargin: 1
             width: 1
-            color: root.transparentBackground
-                   ? Qt.rgba(1.0, 1.0, 1.0, 0.52)
-                   : Qt.rgba(1.0, 1.0, 1.0, 0.17)
+            color: root.osdStyle.separatorColor
         }
 
         ColumnLayout {
@@ -215,8 +216,8 @@ Item {
             QGCLabel {
                 Layout.fillWidth: true
                 text: qsTr("FLIGHT TIME")
-                color: Qt.rgba(1.0, 1.0, 1.0, 0.72)
-                font.pixelSize: Math.max(10, ScreenTools.defaultFontPixelHeight * 0.60)
+                color: root.osdStyle.softTextColor
+                font.pixelSize: root.osdStyle.captionFontSize
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
             }
@@ -225,10 +226,10 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 text: root.flightTimeText
-                color: "white"
+                color: root.osdStyle.primaryTextColor
                 font.bold: true
-                font.family: ScreenTools.fixedFontFamily
-                font.pixelSize: Math.max(15, ScreenTools.defaultFontPixelHeight * 0.90)
+                font.family: root.osdStyle.fixedFontFamily
+                font.pixelSize: root.osdStyle.timeValueFontSize
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
                 verticalAlignment: Text.AlignVCenter

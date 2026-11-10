@@ -9,12 +9,14 @@ import SiYi.Object 1.0
 
 import "controls" as PGRControls
 import "style" as PGRStyle
+import "../Shared/Widget" as Shared
+import "." as LocalCamera
 
 Item {
     id: root
     anchors.fill: parent
     // Camera controls are interactive and must stay above every OSD item.
-    z: 10000
+    z: mainWindow.widgetPanelZ
 
     // No full-screen MouseArea here.
     // Only small buttons are interactive, so the main video/gimbal/tracking area remains safe.
@@ -23,10 +25,10 @@ Item {
     property bool expanded: true
 
     readonly property bool controlsVisible:
-        DropWidgetSettings.cameraControlsVisible
+        WidgetPanelSettings.cameraControlsVisible
 
     readonly property bool logsVisible:
-        DropWidgetSettings.cameraLogsVisible
+        WidgetPanelSettings.cameraLogsVisible
 
     // Development mode:
     // true  - buttons remain visible but disabled when camera capability is false.
@@ -106,16 +108,33 @@ Item {
         Math.max(6, ScreenTools.defaultFontPixelHeight * 0.35)
 
     readonly property bool panelLocked:
-        DropWidgetSettings.cameraControlsLocked
+        WidgetPanelSettings.cameraControlsLocked
 
-    property real controlPanelX: -1
-    property real controlPanelY: -1
-    property bool controlPanelPositionReady: false
-    property bool controlPanelDragging: false
-    property real dragStartPointerX: 0
-    property real dragStartPointerY: 0
-    property real dragStartPanelX: 0
-    property real dragStartPanelY: 0
+    property alias controlPanelX: cameraPanelState.panelX
+    property alias controlPanelY: cameraPanelState.panelY
+    readonly property bool controlPanelPositionReady: cameraPanelState.ready
+    readonly property bool controlPanelDragging: cameraPanelState.dragging
+    readonly property real collapsedPanelWidth: 58
+    readonly property real collapsedPanelHeight: 52
+
+    WidgetPanelController {
+        id: cameraPanelState
+        enabled: root.visible && root.enabled && root.controlsVisible && root.width > 0 && root.height > 0
+        locked: root.panelLocked
+        onEnabledChanged: { if (enabled) Qt.callLater(root.initializeControlPanelPosition) }
+        bounds: Qt.rect(0, 0, root.width, root.height)
+        panelSize: Qt.size(panel.width, root.expanded ? panel.height : root.collapsedPanelHeight)
+        defaultPosition: Qt.point(root.defaultControlPanelX(), root.defaultControlPanelY())
+        savedPosition: Qt.point(Number(WidgetPanelSettings.cameraControlsX),
+                                Number(WidgetPanelSettings.cameraControlsY))
+        useSavedPosition: !root.savedPositionOverlapsToolStrip(
+            Number(WidgetPanelSettings.cameraControlsX),
+            Number(WidgetPanelSettings.cameraControlsY))
+
+        onPositionCommitted: function(x, y) {
+            WidgetPanelSettings.setCameraControlsPosition(x, y)
+        }
+    }
 
     function defaultControlPanelX() {
         return Math.max(
@@ -156,19 +175,16 @@ Item {
     }
 
     function boundedControlPanelPosition(x, y) {
-        return Qt.point(
-            Math.max(0, Math.min(root.width - panel.width, x)),
-            Math.max(0, Math.min(root.height - panel.height, y))
-        )
+        return cameraPanelState.boundedPosition(x, y)
     }
 
     function initializeControlPanelPosition() {
-        if (root.width <= 0 || root.height <= 0) {
+        if (!cameraPanelState.enabled || root.width <= 0 || root.height <= 0) {
             return
         }
 
-        var savedX = Number(DropWidgetSettings.cameraControlsX)
-        var savedY = Number(DropWidgetSettings.cameraControlsY)
+        var savedX = Number(WidgetPanelSettings.cameraControlsX)
+        var savedY = Number(WidgetPanelSettings.cameraControlsY)
         // Migrate only the old invalid position which covered Return. Any
         // valid user-moved position remains untouched.
         var useDefaultPosition =
@@ -180,15 +196,13 @@ Item {
             useDefaultPosition ? defaultControlPanelY() : savedY
         )
 
-        controlPanelX = position.x
-        controlPanelY = position.y
-        controlPanelPositionReady = true
+        cameraPanelState.setPosition(position.x, position.y)
 
         // Persist the corrected coordinates once. This prevents the obsolete
         // overlapping position from being restored on the next application
         // start while leaving every valid user-moved position untouched.
         if (useDefaultPosition && savedX >= 0 && savedY >= 0) {
-            DropWidgetSettings.setCameraControlsPosition(
+            WidgetPanelSettings.setCameraControlsPosition(
                 controlPanelX,
                 controlPanelY
             )
@@ -212,36 +226,11 @@ Item {
         root.keepControlPanelInBounds(true)
     }
 
-    function applyControlPanelPosition(pointerPoint) {
-        var position = boundedControlPanelPosition(
-            dragStartPanelX + pointerPoint.x - dragStartPointerX,
-            dragStartPanelY + pointerPoint.y - dragStartPointerY
-        )
-
-        controlPanelX = position.x
-        controlPanelY = position.y
-    }
-
     function keepControlPanelInBounds(savePosition) {
-        if (!controlPanelPositionReady
-                || root.width <= 0
-                || root.height <= 0) {
-            return
-        }
-
-        var position = boundedControlPanelPosition(
-            controlPanelX,
-            controlPanelY
-        )
-
-        controlPanelX = position.x
-        controlPanelY = position.y
-
+        if (!cameraPanelState.ready || !cameraPanelState.enabled) return
+        cameraPanelState.keepInBounds()
         if (savePosition) {
-            DropWidgetSettings.setCameraControlsPosition(
-                controlPanelX,
-                controlPanelY
-            )
+            WidgetPanelSettings.setCameraControlsPosition(controlPanelX, controlPanelY)
         }
     }
 
@@ -475,347 +464,223 @@ Item {
         id: style
     }
 
-    Rectangle {
-        id: panel
+    // Visual-only host: preserve the source coordinate system and visibility.
+    Item {
+        objectName: "cameraControlsWidgetStack"
+        parent: mainWindow.widgetPanelOverlay
+        width: root.width
+        height: root.height
+        z: mainWindow.widgetPanelZ
+        visible: root.visible
+        enabled: root.enabled
+        opacity: mainWindow.widgetPanelOpacity(root)
+        transform: Matrix4x4 {
+            matrix: mainWindow.widgetPanelTransform(root)
+        }
 
-        // Keep the complete movable panel, including its drag/lock controls,
-        // above the remaining children of this overlay.
-        z: 100
+        Shared.WidgetPanelSurface {
+            id: panel
 
-        visible:
-            root.controlsVisible
-            && root.controlPanelPositionReady
-        enabled: root.controlsVisible
+            // Keep the complete movable panel, including its drag/lock controls,
+            // above the remaining children of this overlay.
+            z: 100
 
-        x: root.controlPanelX
-        y: root.controlPanelY
+            visible:
+                root.controlsVisible
+                && root.expanded
+                && root.controlPanelPositionReady
+            enabled: root.controlsVisible
 
-        width: ScreenTools.defaultFontPixelWidth * 8
-        height: controlsColumn.implicitHeight + 16
-        radius: 10
-        color: style.panelBackground
-        border.width: 1
-        border.color: style.panelBorder
+            x: root.controlPanelX
+            y: root.controlPanelY
 
-        onHeightChanged: root.keepControlPanelInBounds(false)
+            width: ScreenTools.defaultFontPixelWidth * 8
+            height: controlsColumn.implicitHeight + 16
+            radius: 10
+            color: style.panelBackground
+            border.width: 1
+            border.color: style.panelBorder
 
-        ColumnLayout {
-            id: controlsColumn
+            onHeightChanged: root.keepControlPanelInBounds(false)
 
-            anchors.fill: parent
+            ColumnLayout {
+                id: controlsColumn
 
-            anchors.leftMargin:
-                Math.max(
-                    0,
-                    (parent.width - root.cameraInnerButtonWidth) / 2
-                )
+                anchors.fill: parent
 
-            anchors.rightMargin:
-                Math.max(
-                    0,
-                    (parent.width - root.cameraInnerButtonWidth) / 2
-                )
+                anchors.leftMargin:
+                    Math.max(
+                        0,
+                        (parent.width - root.cameraInnerButtonWidth) / 2
+                    )
 
-            anchors.topMargin: 6
-            anchors.bottomMargin: 6
-            spacing: 6
+                anchors.rightMargin:
+                    Math.max(
+                        0,
+                        (parent.width - root.cameraInnerButtonWidth) / 2
+                    )
 
-            // A single centered lock is also the drag handle. A short click
-            // toggles the lock; dragging is available only while unlocked.
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 22
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
+                spacing: 6
 
-                Rectangle {
-                    id: cameraLockButton
-
-                    anchors.centerIn: parent
-
-                    width: 22
-                    height: 22
-                    radius: 6
-                    scale:
-                        cameraLockMouseArea.pressed
-                        && !cameraLockMouseArea.dragMoved
-                            ? 0.92
-                            : 1.0
-
-                    color:
-                        cameraLockMouseArea.pressed
-                            ? style.buttonPressed
-                            : cameraLockMouseArea.containsMouse
-                              ? style.buttonActive
-                              : root.panelLocked
-                                ? Qt.rgba(1, 1, 1, 0.08)
-                                : style.buttonActive
-                    border.width: 1
-                    border.color:
-                        root.panelLocked
-                            ? Qt.rgba(1, 1, 1, 0.18)
-                            : style.buttonBorder
-
-                    Behavior on color {
-                        ColorAnimation { duration: 120 }
-                    }
-
-                    Behavior on scale {
-                        NumberAnimation { duration: 90 }
-                    }
-
-                    QGCColoredImage {
-                        anchors.centerIn: parent
-                        width: 12
-                        height: width
-                        sourceSize.width: width
-                        source:
-                            root.panelLocked
-                                ? "qrc:/InstrumentValueIcons/lock-closed.svg"
-                                : "qrc:/InstrumentValueIcons/lock-open.svg"
-                        color: style.textPrimary
-                        mipmap: true
-                    }
-
-                    MouseArea {
-                        id: cameraLockMouseArea
-
-                        anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton
-                        hoverEnabled: true
-                        preventStealing: true
-                        cursorShape:
-                            root.panelLocked
-                                ? Qt.PointingHandCursor
-                                : Qt.SizeAllCursor
-
-                        property bool dragMoved: false
-                        readonly property real dragThreshold: 4
-
-                        function pointerInRoot(mouse) {
-                            return mapToItem(root, mouse.x, mouse.y)
-                        }
-
-                        onPressed: function(mouse) {
-                            dragMoved = false
-                            root.controlPanelDragging = false
-
-                            if (!root.panelLocked) {
-                                var pointerPoint = pointerInRoot(mouse)
-                                root.controlPanelDragging = true
-                                root.dragStartPointerX = pointerPoint.x
-                                root.dragStartPointerY = pointerPoint.y
-                                root.dragStartPanelX = root.controlPanelX
-                                root.dragStartPanelY = root.controlPanelY
-                            }
-
-                            mouse.accepted = true
-                        }
-
-                        onPositionChanged: function(mouse) {
-                            if (!pressed
-                                    || root.panelLocked
-                                    || !root.controlPanelDragging) {
-                                return
-                            }
-
-                            var pointerPoint = pointerInRoot(mouse)
-                            var deltaX =
-                                pointerPoint.x - root.dragStartPointerX
-                            var deltaY =
-                                pointerPoint.y - root.dragStartPointerY
-
-                            if (!dragMoved
-                                    && Math.abs(deltaX) < dragThreshold
-                                    && Math.abs(deltaY) < dragThreshold) {
-                                return
-                            }
-
-                            dragMoved = true
-                            root.applyControlPanelPosition(pointerPoint)
-                            mouse.accepted = true
-                        }
-
-                        onReleased: function(mouse) {
-                            if (root.controlPanelDragging && dragMoved) {
-                                root.applyControlPanelPosition(
-                                    pointerInRoot(mouse)
-                                )
-                                root.keepControlPanelInBounds(true)
-                            } else {
-                                DropWidgetSettings.cameraControlsLocked =
-                                    !root.panelLocked
-                            }
-
-                            root.controlPanelDragging = false
-                            mouse.accepted = true
-                        }
-
-                        onCanceled: {
-                            if (root.controlPanelDragging && dragMoved) {
-                                root.keepControlPanelInBounds(true)
-                            }
-
-                            root.controlPanelDragging = false
-                            dragMoved = false
-                        }
-                    }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "CAM"
+                    color: style.textPrimary
+                    font.pixelSize: 10
+                    font.bold: true
                 }
-            }
 
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.cameraHeaderHeight
+                Shared.WidgetPanelActions {
+                    Layout.alignment: Qt.AlignHCenter
+                    orientation: Qt.Vertical
+                    panelController: cameraPanelState
+                    coordinateItem: root
+                    locked: root.panelLocked
 
-                // Horizontal compact header, matching the requested layout.
-                text: "CAM"
-                textSize: 9
-                active: root.expanded && root.hasCamera
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onClicked: {
-                    root.expanded = !root.expanded
+                    onLockToggleRequested: WidgetPanelSettings.cameraControlsLocked = !root.panelLocked
+                    onCollapseRequested: root.expanded = false
                 }
+
+
+                PGRControls.PGRCameraButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.buttonHeight
+                    visible: root.shouldShowControl(root.canZoom)
+                    enabledState: root.canZoom
+
+                    text: "Z+"
+                    textSize: 11
+
+                    idleColor: style.buttonIdle
+                    activeColor: style.buttonActive
+                    pressedColor: style.buttonPressed
+                    borderColor: style.buttonBorder
+                    textColor: style.textPrimary
+
+                    onPressed: root.zoomIn()
+                    onReleased: root.stopZoom()
+                    onCanceled: root.stopZoom()
+                }
+
+                PGRControls.PGRCameraButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.buttonHeight
+                    visible: root.shouldShowControl(root.canZoom)
+                    enabledState: root.canZoom
+
+                    text: "Z-"
+                    textSize: 11
+
+                    idleColor: style.buttonIdle
+                    activeColor: style.buttonActive
+                    pressedColor: style.buttonPressed
+                    borderColor: style.buttonBorder
+                    textColor: style.textPrimary
+
+                    onPressed: root.zoomOut()
+                    onReleased: root.stopZoom()
+                    onCanceled: root.stopZoom()
+                }
+
+                PGRControls.PGRCameraButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.buttonHeight
+
+                    visible: root.expanded
+                             && (root.showUnavailableControls
+                                 || root.canResetPosition)
+
+                    enabledState: root.canResetPosition
+
+                    text: "RST"
+                    textSize: 9
+
+                    idleColor: style.buttonIdle
+                    activeColor: style.buttonActive
+                    pressedColor: style.buttonPressed
+                    borderColor: style.buttonBorder
+                    textColor: style.textPrimary
+
+                    onPressed: root.resetCameraPosition()
+                }
+
+                PGRControls.PGRCameraButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.buttonHeight
+                    visible: root.shouldShowControl(root.canFocus)
+                    enabledState: root.canFocus
+
+                    text: "F+"
+                    textSize: 11
+
+                    idleColor: style.buttonIdle
+                    activeColor: style.buttonActive
+                    pressedColor: style.buttonPressed
+                    borderColor: style.buttonBorder
+                    textColor: style.textPrimary
+
+                    onPressed: root.focusFar()
+                    onReleased: root.stopFocus()
+                    onCanceled: root.stopFocus()
+                }
+
+                PGRControls.PGRCameraButton {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.buttonHeight
+                    visible: root.shouldShowControl(root.canFocus)
+                    enabledState: root.canFocus
+
+                    text: "F-"
+                    textSize: 11
+
+                    idleColor: style.buttonIdle
+                    activeColor: style.buttonActive
+                    pressedColor: style.buttonPressed
+                    borderColor: style.buttonBorder
+                    textColor: style.textPrimary
+
+                    onPressed: root.focusNear()
+                    onReleased: root.stopFocus()
+                    onCanceled: root.stopFocus()
+                }
+
             }
+        }
 
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.buttonHeight
-                visible: root.shouldShowControl(root.canZoom)
-                enabledState: root.canZoom
-
-                text: "Z+"
-                textSize: 11
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onPressed: root.zoomIn()
-                onReleased: root.stopZoom()
-                onCanceled: root.stopZoom()
-            }
-
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.buttonHeight
-                visible: root.shouldShowControl(root.canZoom)
-                enabledState: root.canZoom
-
-                text: "Z-"
-                textSize: 11
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onPressed: root.zoomOut()
-                onReleased: root.stopZoom()
-                onCanceled: root.stopZoom()
-            }
-
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.buttonHeight
-
-                visible: root.expanded
-                         && (root.showUnavailableControls
-                             || root.canResetPosition)
-
-                enabledState: root.canResetPosition
-
-                text: "RST"
-                textSize: 9
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onPressed: root.resetCameraPosition()
-            }
-
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.buttonHeight
-                visible: root.shouldShowControl(root.canFocus)
-                enabledState: root.canFocus
-
-                text: "F+"
-                textSize: 11
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onPressed: root.focusFar()
-                onReleased: root.stopFocus()
-                onCanceled: root.stopFocus()
-            }
-
-            PGRControls.PGRCameraButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.buttonHeight
-                visible: root.shouldShowControl(root.canFocus)
-                enabledState: root.canFocus
-
-                text: "F-"
-                textSize: 11
-
-                idleColor: style.buttonIdle
-                activeColor: style.buttonActive
-                pressedColor: style.buttonPressed
-                borderColor: style.buttonBorder
-                textColor: style.textPrimary
-
-                onPressed: root.focusNear()
-                onReleased: root.stopFocus()
-                onCanceled: root.stopFocus()
-            }
-
+        Shared.WidgetCollapsedHandle {
+            visible: root.controlsVisible && !root.expanded && root.controlPanelPositionReady
+            z: 100
+            x: root.controlPanelX + Math.max(0, (panel.width - width) / 2)
+            y: root.controlPanelY
+            panelController: cameraPanelState
+            coordinateItem: root
+            collapsedWidth: root.collapsedPanelWidth
+            collapsedPanelHeight: root.collapsedPanelHeight
+            onExpandRequested: root.expanded = true
         }
     }
 
-    Rectangle {
-        id: debugStatusPanel
+    // Visual-only host: preserve the source coordinate system and visibility.
+    Item {
+        objectName: "cameraLogsWidgetStack"
+        parent: mainWindow.widgetPanelOverlay
+        width: root.width
+        height: root.height
+        z: mainWindow.widgetPanelZ
+        visible: root.visible
+        enabled: root.enabled
+        opacity: mainWindow.widgetPanelOpacity(root)
+        transform: Matrix4x4 {
+            matrix: mainWindow.widgetPanelTransform(root)
+        }
 
-        visible:
-            root.logsVisible
-            && root.debugStatusVisible
-
-        anchors.right: parent.right
-        anchors.rightMargin: root.panelMargin
-
-        y: Math.round((parent.height - height) / 2)
-
-        width: debugStatusText.implicitWidth + 16
-        height: debugStatusText.implicitHeight + 10
-        radius: 6
-
-        color: Qt.rgba(0, 0, 0, 0.70)
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.20)
-
-        Text {
-            id: debugStatusText
-
-            anchors.centerIn: parent
-
-            color: "white"
-            font.pixelSize: 10
-            lineHeight: 1.1
-
-            text:
+        LocalCamera.PGRCameraLogPanel {
+            anchors.fill: parent
+            visible: root.logsVisible && root.debugStatusVisible
+            panelMargin: root.panelMargin
+            logText:
                 "SIYI BACKEND\n"
                 + "RAW URL: " + (root.rawVideoUrl !== "" ? root.rawVideoUrl : "-") + "\n"
                 + "URL: " + (root.videoUrl !== "" ? root.videoUrl : "-") + "\n"
@@ -828,4 +693,5 @@ Item {
                 + "FOCUS: " + root.canFocus
         }
     }
+
 }

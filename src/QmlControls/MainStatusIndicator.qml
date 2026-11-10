@@ -21,9 +21,6 @@ RowLayout {
     id:         control
     spacing:    ScreenTools.defaultFontPixelWidth
 
-    readonly property bool _darkToolbarStyle:
-        objectName === "pgrDarkToolbarStatus"
-
     property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
     property var    _vehicleInAir:      _activeVehicle ? _activeVehicle.flying || _activeVehicle.landing : false
     property bool   _vtolInFWDFlight:   _activeVehicle ? _activeVehicle.vtolInFwdFlight : false
@@ -44,7 +41,7 @@ RowLayout {
         verticalAlignment:  Text.AlignVCenter
         text:               mainStatusText()
         font.pointSize:     ScreenTools.largeFontPointSize
-        color:              control._darkToolbarStyle ? "white" : qgcPal.text
+        color:              qgcPal.text
 
         property string _commLostText:      qsTr("Comms Lost")
         property string _readyToFlyText:    qsTr("Ready To Fly")
@@ -127,15 +124,13 @@ RowLayout {
             height:                 width
             source:                 "/res/VehicleMessages.png"
             color:                  getIconColor()
+            useToolbarIconColor:    false
             sourceSize.width:       width
             fillMode:               Image.PreserveAspectFit
             //visible:                _activeVehicle && _activeVehicle.messageCount > 0// FIXME: Is messageCount check needed?
 
             function getIconColor() {
-                let iconColor =
-                    control._darkToolbarStyle
-                        ? "white"
-                        : qgcPal.text
+                let iconColor = qgcPal.text
 
                 if (_activeVehicle) {
                     if (_activeVehicle.messageTypeWarning) {
@@ -160,7 +155,7 @@ RowLayout {
         verticalAlignment:  Text.AlignVCenter
         text:               _vtolInFWDFlight ? qsTr("FW(vtol)") : qsTr("MR(vtol)")
         font.pointSize:     _vehicleInAir ? ScreenTools.largeFontPointSize : ScreenTools.defaultFontPointSize
-        color:              control._darkToolbarStyle ? "white" : qgcPal.text
+        color:              qgcPal.text
         visible:            _activeVehicle && _activeVehicle.vtol
 
         QGCMouseArea {

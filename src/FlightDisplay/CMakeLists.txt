@@ -7,6 +7,8 @@ qt_add_qml_module(FlightDisplayModule
     QML_FILES
         CustomGuidedActionsController.qml
         DefaultChecklist.qml
+        ControllerInput/ControllerInputStatusModel.qml
+        ControllerInput/ControllerInputStatusCard.qml
         ControllerInput/ControllerInputPanel.qml
         DropWidget/DropWidgetController.qml
         DropWidget/DropControlPanel.qml
@@ -57,9 +59,19 @@ qt_add_qml_module(FlightDisplayModule
         OSD/LinkOSD.qml
         OSD/StatusMessageOSD.qml
         PGRCamera/PGRCameraMouseController.qml
+        PGRCamera/PGRCameraLogPanel.qml
         PGRCamera/PGRCameraOverlay.qml
         PGRCamera/controls/PGRCameraButton.qml
         PGRCamera/style/PGRCameraStyle.qml
+        Shared/Widget/WidgetPanelSurface.qml
+        Shared/Widget/WidgetPanelHost.qml
+        Shared/Widget/WidgetPanelActions.qml
+        Shared/Widget/WidgetIconButton.qml
+        Shared/Widget/WidgetPanelDragArea.qml
+        Shared/Widget/WidgetCollapsedHandle.qml
+        Shared/Widget/WidgetPanelStyle.qml
+        Shared/OSD/OSDStyle.qml
+        Shared/OSD/OSDPanelSurface.qml
         FlyViewWidgetLayer.qml
         GripperMenu.qml
         GuidedActionConfirm.qml
@@ -95,7 +107,10 @@ qt_add_qml_module(FlightDisplayModule
     SOURCES
         DropWidgetJoystickBridge.h
         DropWidgetJoystickBridge.cpp
-    NO_PLUGIN
+        Shared/Widget/widgetpanelcontroller.h
+        Shared/Widget/widgetpanelcontroller.cpp
+        Shared/Widget/widgetpanelsettings.h
+        Shared/Widget/widgetpanelsettings.cpp
 )
 
 target_sources(${CMAKE_PROJECT_NAME}
