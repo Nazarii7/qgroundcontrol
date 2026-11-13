@@ -1,7 +1,7 @@
 /****************************************************************************
  *
  * GpsOSD.qml
- * Compact GPS status overlay for Fly View video OSD.
+ * Compact GPS / VisNav status overlay for Fly View video OSD.
  *
  ****************************************************************************/
 
@@ -17,15 +17,44 @@ Shared.OSDPanelSurface {
     property var vehicle: null
     property bool displayEnabled: true
 
+    readonly property var navigation: vehicle && vehicle.navigation ? vehicle.navigation : null
+    readonly property bool navigationDetected: navigation !== null && navigation.identified
+    // Until discovery finishes, GPS1 is not evidence of the selected source.
+    // Use the same layout throughout discovery, synchronization and operation.
+    readonly property bool discoveryPending: vehicle !== null && navigation !== null
+                                            && !navigationDetected && !vehicle.initialConnectComplete
+    readonly property int navigationSource: navigationDetected ? navigation.activeSource : -1
+    readonly property bool initializing: navigationDetected && navigation.initializing
+    readonly property bool linkAlive: vehicle !== null && vehicle.vehicleLinkManager
+                                      && !vehicle.vehicleLinkManager.communicationLost
+    readonly property string navigationTitle: navigationDetected
+        ? initializing
+            ? navigation.requestedSource === 0 ? "SYNC GPS"
+              : navigation.requestedSource === 1 ? "SYNC VISNAV" : "SYNC SD"
+            : navigationSource === 0 ? "GPS" : navigationSource === 1 ? "VISNAV" : "NAV · --"
+        : discoveryPending ? "NAV · --" : "GPS"
+    readonly property bool selectedDataAvailable: linkAlive && !discoveryPending && !initializing
+                                                && (!navigationDetected || navigation.activeDataAvailable)
 
-    readonly property var gpsGroup:
-        vehicle && vehicle.gps ? vehicle.gps : null
+    readonly property var gpsGroup: !vehicle ? null
+        : navigationDetected ? navigationSource === 0 ? vehicle.gps
+                               : navigationSource === 1 ? vehicle.gps2 : null
+        : discoveryPending ? null : vehicle.gps
 
     readonly property int fixType:
-        factInteger(gpsGroup ? gpsGroup.lock : null, -1)
+        selectedDataAvailable ? factInteger(gpsGroup ? gpsGroup.lock : null, -1) : -1
 
+    // Display the counter reported by the selected source: GPS1 or GPS2.
+    // Its value is telemetry from that source, without conversion or estimation.
+    readonly property bool showSatelliteCount: !discoveryPending
+                                              && (!navigationDetected || navigationSource === 0
+                                                  || navigationSource === 1)
     readonly property int satelliteCount:
-        factInteger(gpsGroup ? gpsGroup.count : null, -1)
+        selectedDataAvailable && showSatelliteCount
+            ? factInteger(gpsGroup ? gpsGroup.count : null, -1) : -1
+    readonly property string satelliteText: "SAT " + (satelliteCount >= 0 ? String(satelliteCount) : "--")
+    readonly property string controlStatusText: discoveryPending ? "READ NAV CONFIG"
+        : navigationDetected ? navigation.statusText : ""
 
     readonly property color accentColor: root.osdStyle.accentColor
     readonly property color goodColor: root.osdStyle.gpsGoodColor
@@ -36,7 +65,6 @@ Shared.OSDPanelSurface {
 
     readonly property string fixStatusText: statusTextForFix(fixType)
     readonly property color fixStatusColor: statusColorForFix(fixType)
-    readonly property int satelliteBars: barsForSatellites(satelliteCount, fixType)
 
     width: Math.max(128, ScreenTools.defaultFontPixelWidth * 14)
     height: Math.max(58, ScreenTools.defaultFontPixelHeight * 3.35)
@@ -74,14 +102,16 @@ Shared.OSDPanelSurface {
             return "RTK FIX"
         case 7:
             return "STATIC FIX"
+        case 8:
+            return "PPP"
         default:
             return "--"
         }
     }
 
     function statusColorForFix(value) {
-        if (value >= 6) {
-            return goodColor
+        if (value < 0 || value > 8) {
+            return root.osdStyle.mutedTextColor
         }
         if (value >= 3) {
             return goodColor
@@ -90,25 +120,6 @@ Shared.OSDPanelSurface {
             return warningColor
         }
         return badColor
-    }
-
-    function barsForSatellites(count, lockType) {
-        if (lockType < 2 || count <= 0) {
-            return 0
-        }
-        if (count <= 5) {
-            return 1
-        }
-        if (count <= 8) {
-            return 2
-        }
-        if (count <= 11) {
-            return 3
-        }
-        if (count <= 15) {
-            return 4
-        }
-        return 5
     }
 
     ColumnLayout {
@@ -164,67 +175,64 @@ Shared.OSDPanelSurface {
             }
 
             Text {
-                text: "GPS"
+                objectName: "navigationTitleText"
+                Layout.fillWidth: true
+                text: root.navigationTitle
                 color: root.osdStyle.labelColor
                 font.pixelSize: root.osdStyle.tinyFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
+                elide: Text.ElideRight
             }
-
-            Item { Layout.fillWidth: true }
-        }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 16
-
-            text: root.fixStatusText
-            color: root.fixStatusColor
-            font.pixelSize: root.osdStyle.smallFontSize
-            font.bold: true
-            style: root.readabilityTextStyle
-            styleColor: root.readabilityShadowColor
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
         }
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 15
+            Layout.preferredHeight: 16
             spacing: 5
 
             Text {
-                text: root.satelliteCount >= 0 ? String(root.satelliteCount) : "--"
-                color: root.osdStyle.labelColor
+                objectName: "fixStatusText"
+                Layout.fillWidth: true
+                text: root.fixStatusText
+                color: root.fixStatusColor
                 font.pixelSize: root.osdStyle.smallFontSize
                 font.bold: true
                 style: root.readabilityTextStyle
                 styleColor: root.readabilityShadowColor
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
             }
 
-            Item { Layout.fillWidth: true }
-
-            Row {
-                Layout.alignment: Qt.AlignRight | Qt.AlignBottom
-                spacing: 2
-
-                Repeater {
-                    model: 5
-
-                    Rectangle {
-                        required property int index
-
-                        width: 4
-                        height: 4 + index * 2
-                        radius: 1
-                        anchors.bottom: parent.bottom
-                        color: index < root.satelliteBars
-                               ? root.fixStatusColor
-                               : (root.osdStyle.inactiveIndicatorColor)
-                    }
-                }
+            Text {
+                objectName: "satelliteCountText"
+                visible: root.showSatelliteCount
+                text: root.satelliteText
+                color: root.osdStyle.labelColor
+                font.pixelSize: root.osdStyle.tinyFontSize
+                font.bold: true
+                style: root.readabilityTextStyle
+                styleColor: root.readabilityShadowColor
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignVCenter
             }
+        }
+
+        Text {
+            objectName: "controlStatusText"
+            Layout.fillWidth: true
+            Layout.preferredHeight: 14
+            text: root.controlStatusText
+            color: root.navigationDetected && root.navigation.confirmationFailed ? root.badColor
+                   : root.discoveryPending || root.initializing
+                     || (root.navigationDetected && root.navigation.pending) ? root.warningColor
+                   : root.osdStyle.labelColor
+            font.pixelSize: root.osdStyle.tinyFontSize
+            style: root.readabilityTextStyle
+            styleColor: root.readabilityShadowColor
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
     }
 }

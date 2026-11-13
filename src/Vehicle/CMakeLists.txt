@@ -18,6 +18,10 @@ target_sources(${CMAKE_PROJECT_NAME}
         TerrainProtocolHandler.h
         TrajectoryPoints.cc
         TrajectoryPoints.h
+        NavigationMavlink.h
+        NavigationSwitchState.h
+        NavigationSourceController.h
+        NavigationSourceController.cc
         Vehicle.cc
         Vehicle.h
         VehicleLinkManager.cc

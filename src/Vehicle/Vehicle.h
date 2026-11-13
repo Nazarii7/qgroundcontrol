@@ -25,6 +25,7 @@
 #include "QmlObjectListModel.h"
 #include "SysStatusSensorInfo.h"
 #include "VehicleLinkManager.h"
+#include "NavigationSourceController.h"
 
 #include "TerrainFactGroup.h"
 #include "VehicleFactGroup.h"
@@ -255,6 +256,7 @@ class Vehicle : public VehicleFactGroup
     Q_PROPERTY(FactGroup*           vehicle         READ vehicleFactGroup           CONSTANT)
     Q_PROPERTY(FactGroup*           gps             READ gpsFactGroup               CONSTANT)
     Q_PROPERTY(FactGroup*           gps2            READ gps2FactGroup              CONSTANT)
+    Q_PROPERTY(NavigationSourceController* navigation READ navigationController CONSTANT)
     Q_PROPERTY(FactGroup*           wind            READ windFactGroup              CONSTANT)
     Q_PROPERTY(FactGroup*           vibration       READ vibrationFactGroup         CONSTANT)
     Q_PROPERTY(FactGroup*           temperature     READ temperatureFactGroup       CONSTANT)
@@ -595,6 +597,7 @@ class Vehicle : public VehicleFactGroup
     FactGroup* vehicleFactGroup             () { return _vehicleFactGroup; }
     FactGroup* gpsFactGroup                 () { return &_gpsFactGroup; }
     FactGroup* gps2FactGroup                () { return &_gps2FactGroup; }
+    NavigationSourceController* navigationController() const { return _navigationController; }
     FactGroup* windFactGroup                () { return &_windFactGroup; }
     FactGroup* vibrationFactGroup           () { return &_vibrationFactGroup; }
     FactGroup* temperatureFactGroup         () { return &_temperatureFactGroup; }
@@ -1016,6 +1019,7 @@ class Vehicle : public VehicleFactGroup
     QFile               _csvLogFile;
 
     bool            _joystickEnabled = false;
+    NavigationSourceController* _navigationController = nullptr;
     bool _isActiveVehicle = false;
 
     QGeoCoordinate  _coordinate;

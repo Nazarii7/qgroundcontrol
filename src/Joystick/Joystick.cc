@@ -446,6 +446,7 @@ void Joystick::run()
     _open();
 
     _axisTime.start();
+    _navigationSampleTime.start();
 
     for (int buttonIndex = 0; buttonIndex < _totalButtonCount; buttonIndex++) {
         if (_buttonActionArray[buttonIndex]) {
@@ -510,6 +511,29 @@ void Joystick::_handleButtons()
                 emit rawButtonPressedChanged(rgButtonValueIndex, newButtonValue);
                 emit buttonInputChanged(rgButtonValueIndex, newButtonValue);
             }
+        }
+    }
+
+    // Only this action consumes a maintained level; all existing edge actions
+    // retain their original path. Multiple assignments are ambiguous, so none
+    // is sent until exactly one physical switch owns the navigation action.
+    if (_navigationSampleTime.elapsed() >= 100) {
+        _navigationSampleTime.restart();
+        int navigationButton = -1;
+        int navigationMappings = 0;
+        for (int i = 0; i < _totalButtonCount; ++i) {
+            if (_buttonActionArray[i] && _buttonActionArray[i]->action == _buttonActionNavigation) {
+                navigationButton = i;
+                ++navigationMappings;
+            }
+        }
+        if (navigationMappings == 1 && _activeVehicle && _activeVehicle->joystickEnabled()
+            && !_calibrationMode && _calibrated) {
+            emit navigationSwitchSample(navigationButton,
+                                        _rgButtonValues[navigationButton] != BUTTON_UP,
+                                        NavigationSourceController::monotonicMs());
+        } else if (_activeVehicle) {
+            emit navigationSwitchSample(-1, false, NavigationSourceController::monotonicMs());
         }
     }
 
@@ -695,6 +719,8 @@ void Joystick::startPolling(Vehicle* vehicle)
 {
     if (vehicle) {
         if (_activeVehicle) {
+            (void) disconnect(this, &Joystick::navigationSwitchSample,
+                              _activeVehicle->navigationController(), &NavigationSourceController::sampleSwitch);
             (void) disconnect(this, &Joystick::setArmed, _activeVehicle, &Vehicle::setArmedShowError);
             (void) disconnect(this, &Joystick::setVtolInFwdFlight, _activeVehicle, &Vehicle::setVtolInFwdFlight);
             (void) disconnect(this, &Joystick::setFlightMode, _activeVehicle, &Vehicle::setFlightMode);
@@ -713,6 +739,9 @@ void Joystick::startPolling(Vehicle* vehicle)
         }
 
         _activeVehicle = vehicle;
+        (void) connect(this, &Joystick::navigationSwitchSample,
+                       vehicle->navigationController(), &NavigationSourceController::sampleSwitch,
+                       static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
 
                 // If joystick is not calibrated, disable it
         if ((axisCount() != 0) && !_calibrated) {
@@ -851,6 +880,11 @@ void Joystick::setButtonAction(int button, const QString& action)
     }
 
     qCWarning(JoystickLog) << Q_FUNC_INFO << button << action;
+
+    if (action == _buttonActionNavigation
+        || (_buttonActionArray[button] && _buttonActionArray[button]->action == _buttonActionNavigation)) {
+        emit navigationSwitchSample(-1, false, NavigationSourceController::monotonicMs());
+    }
 
     QSettings settings;
     settings.beginGroup(_settingsGroup);
@@ -995,6 +1029,9 @@ void Joystick::setButtonFrequency(float val)
 
 void Joystick::setCalibrationMode(bool calibrating)
 {
+    if (_calibrationMode != calibrating) {
+        emit navigationSwitchSample(-1, false, NavigationSourceController::monotonicMs());
+    }
     _calibrationMode = calibrating;
     if (calibrating && !isRunning()) {
         _pollingStartedForCalibration = true;
@@ -1006,6 +1043,9 @@ void Joystick::setCalibrationMode(bool calibrating)
 
 void Joystick::_executeButtonAction(const QString &action, bool buttonDown)
 {
+    if (action == _buttonActionNavigation) {
+        return; // Maintained level is sampled in _handleButtons, independent of Repeat.
+    }
     if (action == _buttonActionDropHold) {
         if (buttonDown) {
             DropWidgetJoystickBridge::instance()->triggerDropHoldPressed();
@@ -1196,6 +1236,7 @@ void Joystick::_buildActionList(Vehicle *activeVehicle)
     _availableActionTitles.clear();
 
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionNone));
+    _assignableButtonActions->append(new AssignableButtonAction(_buttonActionNavigation));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionArm));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionDisarm));
     _assignableButtonActions->append(new AssignableButtonAction(_buttonActionToggleArm));

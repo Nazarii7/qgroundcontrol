@@ -318,6 +318,7 @@ void Vehicle::_commonInit()
 
     _createImageProtocolManager();
     _createStatusTextHandler();
+    _navigationController = new NavigationSourceController(this);
     _createMAVLinkLogManager();
 
             // _addFactGroup(_vehicleFactGroup,            _vehicleFactGroupName);

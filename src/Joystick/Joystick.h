@@ -196,6 +196,9 @@ class Joystick : public QThread
     void axisInputChanged(int index, int value);
     void buttonInputChanged(int index, bool pressed);
 
+    // Sampled at 10 Hz, including the OFF level. A maintained switch is not a toggle action.
+    void navigationSwitchSample(int button, bool pressed, qint64 sampledAt);
+
     void calibratedChanged(bool calibrated);
     void buttonActionsChanged();
     void assignableActionsChanged();
@@ -289,6 +292,7 @@ class Joystick : public QThread
 
     bool _accumulator = false;
     bool _calibrated = false;
+    QElapsedTimer _navigationSampleTime;
     bool _calibrationMode = false;
     bool _circleCorrection = true;
     bool _deadband = false;
@@ -343,6 +347,7 @@ class Joystick : public QThread
     static constexpr const char *_vtolTXModeSettingsKey =          "TXMode_VTOL";
     static constexpr const char *_submarineTXModeSettingsKey =     "TXMode_Submarine";
 
+    static constexpr const char *_buttonActionNavigation = QT_TR_NOOP("GPS / Salamandra");
     static constexpr const char *_buttonActionNone =               QT_TR_NOOP("No Action");
     static constexpr const char *_buttonActionArm =                QT_TR_NOOP("Arm");
     static constexpr const char *_buttonActionDisarm =             QT_TR_NOOP("Disarm");
